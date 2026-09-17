@@ -1,7 +1,8 @@
 # Core Domain Distillation — Tiferet Dialect Compiler
 
-**Status:** Draft · **Domain:** `compiler` · **Code:** `compiler/` · **Branch:** `v1.x-proto`
+**Status:** Frozen for reconstruction · **Domain:** `compiler` · **Code:** `compiler/` · **Branch:** `main`
 **Companion:** `docs/compiler/domain-vision.md`
+**Catalog freeze:** `TTC1-FREEZE-001`
 
 ## 1. Purpose of this document
 
@@ -137,9 +138,9 @@ unambiguous downstream. `EmitScanResult` renders the token stream for inspection
 *Turn tokens into one structural model.*
 
 `PerformSyntacticAnalysis` (`compiler/events/parser.py`) drives the parser service
-(`compiler/utils/parser.py`, with the grammar in
-`compiler/utils/python_parser.py`) to produce the model defined in
-`compiler/domain/ast.py`, extended by `compiler/domain/artifact.py`.
+(`compiler/utils/parser.py`, a thin adapter over `tiferet_ly.utils.parse.PlyParser`
+driven by the declared grammar in `compiler/assets/productions.yml`) to produce the
+model defined in `compiler/domain/ast.py`, extended by `compiler/domain/artifact.py`.
 
 The model is deliberately Tiferet-aware rather than a generic Python tree:
 
@@ -159,6 +160,12 @@ back, allowing later stages to run on a stored model instead of re-parsing sourc
 
 **This step is fully component-agnostic.** Every dialect uses the same tiers,
 members, and snippets.
+
+A helper in `compiler/utils/parser.py` with no Tiferet-dialect coupling (e.g.
+`make_position_helpers`, a generic PLY lexpos/lineno position-tracking
+utility) carries a standardized `# UPSTREAM CANDIDATE (tiferet-ly): ...`
+comment banner above its `# ** function:` header, flagging it as a future
+migration candidate once tiferet-ly has a stable home for it.
 
 ### 5.3 Semantic analysis
 *Establish what the file defines and what its references mean.*
@@ -189,33 +196,36 @@ dependencies (Section 7).
 *Verify that the file is a valid instance of what it claims to be.*
 
 `PerformTypeCheck` (`compiler/events/typecheck.py`) reconstructs the scopes and
-runs the checker (`compiler/utils/typecheck.py`), which walks the model with the
-symbol table in hand and **collects** findings rather than failing on the first
-one. Each finding carries a code, a message, the scope path, and a line/column
-where available (`compiler/domain/typecheck.py`,
-`compiler/mappers/typecheck.py`). The current rule catalogue falls into four
-families:
+runs the checker (`compiler/utils/typecheck.py`). Component type is an **input**
+to this step (`-c/--component` on the semantic-bearing commands): the walker is
+one `ConformanceChecker`, parameterized by a rule set selected for the requested
+type. Findings are **collected** rather than failing on the first one. Each
+finding carries a code, a message, the scope path, and a line/column where
+available (`compiler/domain/typecheck.py`, `compiler/mappers/typecheck.py`).
 
-**Group structure.** The imports group may only contain the declared groups
-`core`, `infra`, and `app`, and each of those may contain only import statements.
+The walker is a `StatementWalker` (`compiler/utils/core.py`). Attachments are
+callables: `Attachment.__call__(candidate, context)` is the host invocation.
+Kind 1 specifications still implement `evaluate`, Kind 2 productions and Kind 3
+rewrites still implement `apply`; hosts do not choose among those names. The
+`attaches_to` dispatch loop lives on the walker. Aggregates do not `accept` a
+visitor and do not import utils.
 
-**Section concordance.** A named section must contain the unit it advertises, with
-the matching name: a class section requires the corresponding class name, a
-function section requires the corresponding function name.
+The rule catalogue has a component-agnostic family and a per-dialect family:
 
-**Member well-formedness.** An attribute member must be a variable declaration,
-not a function or class. A method member must be a function, must take `self`
-first, and must declare a return type the model recognizes.
+**Common (every component type).** The imports group may only contain `core`,
+`infra`, and `app`, and each of those may contain only import statements. A named
+section must contain the unit it advertises, with the matching name. An attribute
+member must be a variable declaration; a method member must be a function, must
+take `self` first, and must declare a recognized return type. Assignments and
+arithmetic are checked shallowly against declared and inferred types.
 
-**Expression typing.** Assignments and arithmetic are checked against declared and
-inferred types, with numeric widening and the usual string operations allowed. This
-is intentionally shallow — it exists to catch obvious contradictions inside
-snippets, not to be a general type system.
-
-Of these, only one rule is currently component-specific: an `event` section must
-declare an `execute` method (`compiler/utils/typecheck.py:366`). That single branch
-is the entire visible footprint of "this compiler is for events" in the checking
-layer — which is strong evidence that the rest generalizes.
+**Dialect (selected by component type).** Permitted tier-1 groups, `app`-import
+relationship rules, and required-base rules are parameterized Kind 1
+specifications (`PermittedGroupSpecification`, `AppImportSpecification`,
+`RequiredBaseSpecification`) constructed with dialect data rather than copied
+classes. Unique rules stay their own classes: event `execute`, domain `Field(...)`,
+repos CRUD vocabulary, utils context-manager pairing, interface/DI abstract-method
+shape.
 
 ### 5.5 Distillation
 *Turn the verified model into organized output data.*
@@ -369,23 +379,25 @@ Stated plainly, so that future work can be scoped against it:
 - The distilled output vocabulary: what the organized result is called and how it
   is keyed.
 
-**Currently entangled — the honest inventory:**
-- Pipelines and commands are named for events, so the component type is encoded in
-  *which pipeline you invoke* rather than supplied as input
-  (`compiler/assets/feature.yml`, `compiler/assets/cli.yml`).
-- The recognized section keywords are a single flat set shared by all dialects
-  (`compiler/mappers/artifact.py (23-27)`), so a section keyword valid in one
-  component type is silently accepted in another.
-- One conformance rule is hard-coded for events
-  (`compiler/utils/typecheck.py:366`).
-- The distilled output shape is event-specific
-  (`compiler/utils/codegen.py (46-80)`), and the optimizer reads that shape
-  directly (`compiler/utils/optimizer.py (81-82)`).
-- No relationship checking exists yet; the evidence is produced but never judged.
+**Currently settled — component type as input, relationship checking as Kind 1:**
+- Semantic-bearing pipelines take the component type as request input
+  (`-c/--component`). Feature ids, CLI command names, and `feature.yml` gating
+  stay component-agnostic (`scan.module`, `parse.module`, `semantic.module`,
+  `compile.module`, `compile.ast`).
+- Dialect variation is constructor data on parameterized Kind 1 specifications,
+  plus a small set of unique rule classes. The walking machinery does not branch
+  on component type.
+- Relationship checking exists: each dialect's `AppImportSpecification` judges
+  the `app` import sub-group against that type's permitted dependency set
+  (Section 7). Contexts/blueprints may also allow the framework-root `a` alias.
+- The callable walker seam is the visitor: `StatementWalker.apply_attachments`
+  calls matching attachments as `__call__`. `TiferetGenerator` is a second host
+  tree (artifact groups / member roles) and also invokes rewrites as callables;
+  it is not a `StatementWalker`.
 
-The entanglement is shallow — a handful of places — which is the encouraging part.
-The redesign is about **making component type an input to analysis** and giving
-the variable pieces somewhere to live, not about rebuilding the pipeline.
+**Still variable, not a new entanglement:** distilled output vocabulary remains
+component-specific (`cmpt` envelope, with dual-emitted `evt_grp` for events).
+Lexer and parser replacement are out of this seam (TTC1-RFP-012 / TTC1-RFP-013).
 
 ## 9. Boundaries
 
@@ -403,22 +415,28 @@ and reporting findings precisely.
 
 ## 10. Where this leads
 
-The distillation above points at a small, well-bounded set of changes:
+Most of the seam named here is now in the code (TTC1-RFP-015 / #223):
 
-1. **Component type as an input.** Analysis accepts the component type as a
-   request parameter, so one pipeline serves all ten dialects instead of one
-   pipeline per dialect.
-2. **Rulebooks as first-class, declarable things.** Internal rules and permitted
-   dependency sets described per component type, rather than embedded in walker
-   branches.
-3. **Relationship checking as a real routine.** Judge resolved `app` imports
-   against the permitted set for the declared component type, including
-   indirect-access rules, and report findings in the existing format.
-4. **A component-neutral distilled shape.** Generalize the output vocabulary so
-   distillation and optimization no longer assume events.
-5. **The second dialect as proof.** Implement `assets` — the simplest component
-   type, and the one whose rules differ most obviously from events — as the test
-   that the seam is real.
+1. **Component type as an input.** Done: one pipeline serves all ten dialects;
+   the type arrives as request input, not as a command name.
+2. **Rulebooks as first-class objects the walking machinery consumes.** Done as
+   the callable attachment family in `compiler/utils`, not in domain: Kind 1
+   `Specification`, Kind 2 `Production`, Kind 3 `Rewrite`. Hosts invoke
+   `Attachment.__call__`. `StatementWalker` owns `attaches_to` dispatch.
+   Parameterized Kind 1 families (`PermittedGroupSpecification`,
+   `AppImportSpecification`, `RequiredBaseSpecification`) carry dialect data.
+   Tree-shape queries (`encode`, `children`, `visit_role`, `flatten_call_args`)
+   live on the domain AST types; mapper aggregates inherit them and do not import
+   utils. This is not a YAML-declared rulebook and not `node.accept(visitor)`.
+3. **Relationship checking as Kind 1 app-import specifications.** Done against
+   the Section 7 permitted sets, reported in the existing finding format.
+4. **A component-neutral distilled shape.** In progress: the `cmpt` envelope is
+   the generalized form; events still dual-emit `evt_grp` for Composer.
+5. **The remaining dialects as proof.** The ten component types have rule sets;
+   unique rules stay separate classes. Lexer/parser replacement is TTC1-RFP-012
+   / TTC1-RFP-013 and should consume this visitor seam rather than re-split it.
 
-Each is a candidate for its own proposal. Together they are the difference between
-a compiler for domain events and the compiler the vision statement describes.
+What remains is not a third cohesive form for applying rules. The compiler for
+the vision statement's two questions — *is this file a valid instance of what it
+claims to be?* and *are this file's connections permitted?* — now answers both
+through the same walker.
