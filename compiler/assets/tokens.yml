@@ -1,0 +1,349 @@
+tokens:
+  - ARTIFACT_START:
+      grammar_id: tiferet_dialect
+      pattern: \#\s*\*{3}\s+.*
+      action: |
+        return t
+
+  - ARTIFACT_SECTION:
+      grammar_id: tiferet_dialect
+      pattern: \#\s*\*{2}\s+.*
+      action: |
+        return t
+
+  - ARTIFACT_MEMBER:
+      grammar_id: tiferet_dialect
+      pattern: \#\s*\*\s+.*
+      action: |
+        return t
+
+  - OBSOLETE:
+      grammar_id: tiferet_dialect
+      pattern: \#\s*-{1,2}\s+obsolete:[^\n]+
+      action: |
+        return t
+
+  - TODO:
+      grammar_id: tiferet_dialect
+      pattern: \#\s*\+{1,2}\s+todo:[^\n]+
+      action: |
+        return t
+
+  - SEE:
+      grammar_id: tiferet_dialect
+      pattern: \#\s*>{1,2}\s+see:[^\n]+
+      action: |
+        return t
+
+  - DOCSTRING:
+      grammar_id: tiferet_dialect
+      pattern: (\"\"\"[\s\S]*?\"\"\"|\'\'\'[\s\S]*?\'\'\')
+      action: |
+        t.lexer.lineno += t.value.count('\n')
+        return t
+
+  - LINE_COMMENT:
+      grammar_id: tiferet_dialect
+      pattern: \#(?!\s*\*)(?!\s*-{1,2}\s+obsolete:)(?!\s*\+{1,2}\s+todo:)(?!\s*>{1,2}\s+see:)[^\n].*
+      action: |
+        return t
+
+  - STRING_LITERAL:
+      grammar_id: tiferet_dialect
+      pattern: (\"([^\"\\]|\\.)*\"|\'([^\'\\]|\\.)*\')
+      action: |
+        return t
+
+  - ARROW:
+      grammar_id: tiferet_dialect
+      pattern: ->
+      action: |
+        return t
+
+  - NUMBER_LITERAL:
+      grammar_id: tiferet_dialect
+      pattern: '[0-9]+(\.[0-9]+)?([a-zA-Z_][a-zA-Z0-9_]*)?'
+      action: |
+        import re
+        if re.search(r'[a-zA-Z_]', t.value):
+            t.type = 'UNKNOWN'
+        return t
+
+  - IDENTIFIER:
+      grammar_id: tiferet_dialect
+      pattern: '[a-zA-Z_][a-zA-Z0-9_]*'
+      action: |
+        keyword_map = {
+            'if': 'IF',
+            'elif': 'ELIF',
+            'else': 'ELSE',
+            'for': 'FOR',
+            'while': 'WHILE',
+            'try': 'TRY',
+            'except': 'EXCEPT',
+            'finally': 'FINALLY',
+            'raise': 'RAISE',
+            'with': 'WITH',
+            'assert': 'ASSERT',
+            'pass': 'PASS',
+            'None': 'NONE',
+            'not': 'NOT',
+            'and': 'AND',
+            'or': 'OR',
+            'in': 'IN',
+            'is': 'IS',
+            'async': 'ASYNC',
+            'await': 'AWAIT',
+            'yield': 'YIELD',
+            'continue': 'CONTINUE',
+            'break': 'BREAK',
+            'del': 'DEL',
+            'lambda': 'LAMBDA',
+        }
+        if t.value == 'class':
+            t.type = 'CLASS'
+        elif t.value == 'def':
+            t.type = 'DEF'
+        elif t.value == '__init__':
+            t.type = 'INIT'
+        elif t.value == 'return':
+            t.type = 'RETURN'
+        elif t.value == 'self':
+            t.type = 'SELF'
+        elif t.value == 'from':
+            t.type = 'FROM'
+        elif t.value == 'import':
+            t.type = 'IMPORT'
+        elif t.value == 'as':
+            t.type = 'AS'
+        elif t.value in keyword_map:
+            t.type = keyword_map[t.value]
+        return t
+
+  - 'TRUE':
+      grammar_id: tiferet_dialect
+      pattern: \bTrue\b
+
+  - 'FALSE':
+      grammar_id: tiferet_dialect
+      pattern: \bFalse\b
+
+  - DOUBLESTAR:
+      grammar_id: tiferet_dialect
+      pattern: \*\*
+
+  - DOUBLESLASH:
+      grammar_id: tiferet_dialect
+      pattern: //
+
+  - EQEQ:
+      grammar_id: tiferet_dialect
+      pattern: ==
+
+  - NOTEQ:
+      grammar_id: tiferet_dialect
+      pattern: '!='
+
+  - LTEQ:
+      grammar_id: tiferet_dialect
+      pattern: <=
+
+  - GTEQ:
+      grammar_id: tiferet_dialect
+      pattern: '>='
+
+  - PLUS:
+      grammar_id: tiferet_dialect
+      pattern: \+
+
+  - MINUS:
+      grammar_id: tiferet_dialect
+      pattern: '-'
+
+  - STAR:
+      grammar_id: tiferet_dialect
+      pattern: \*
+
+  - SLASH:
+      grammar_id: tiferet_dialect
+      pattern: /
+
+  - PERCENT:
+      grammar_id: tiferet_dialect
+      pattern: '%'
+
+  - PIPE:
+      grammar_id: tiferet_dialect
+      pattern: \|
+
+  - AMPERSAND:
+      grammar_id: tiferet_dialect
+      pattern: '&'
+
+  - LT:
+      grammar_id: tiferet_dialect
+      pattern: <
+
+  - GT:
+      grammar_id: tiferet_dialect
+      pattern: '>'
+
+  - AT:
+      grammar_id: tiferet_dialect
+      pattern: '@'
+
+  - LPAREN:
+      grammar_id: tiferet_dialect
+      pattern: \(
+
+  - RPAREN:
+      grammar_id: tiferet_dialect
+      pattern: \)
+
+  - LBRACK:
+      grammar_id: tiferet_dialect
+      pattern: \[
+
+  - RBRACK:
+      grammar_id: tiferet_dialect
+      pattern: \]
+
+  - LBRACE:
+      grammar_id: tiferet_dialect
+      pattern: \{
+
+  - RBRACE:
+      grammar_id: tiferet_dialect
+      pattern: \}
+
+  - COMMA:
+      grammar_id: tiferet_dialect
+      pattern: ','
+
+  - COLON:
+      grammar_id: tiferet_dialect
+      pattern: ':'
+
+  - ELLIPSIS:
+      grammar_id: tiferet_dialect
+      pattern: \.\.\.
+
+  - DOT:
+      grammar_id: tiferet_dialect
+      pattern: \.
+
+  - EQUALS:
+      grammar_id: tiferet_dialect
+      pattern: '='
+
+  - NEWLINE:
+      grammar_id: tiferet_dialect
+      pattern: (?:[ \t]*\n)+
+      action: |
+        t.lexer.lineno += t.value.count('\n')
+        return t
+
+  - FROM:
+      grammar_id: tiferet_dialect
+
+  - IMPORT:
+      grammar_id: tiferet_dialect
+
+  - AS:
+      grammar_id: tiferet_dialect
+
+  - CLASS:
+      grammar_id: tiferet_dialect
+
+  - DEF:
+      grammar_id: tiferet_dialect
+
+  - INIT:
+      grammar_id: tiferet_dialect
+
+  - RETURN:
+      grammar_id: tiferet_dialect
+
+  - YIELD:
+      grammar_id: tiferet_dialect
+
+  - SELF:
+      grammar_id: tiferet_dialect
+
+  - IF:
+      grammar_id: tiferet_dialect
+
+  - ELIF:
+      grammar_id: tiferet_dialect
+
+  - ELSE:
+      grammar_id: tiferet_dialect
+
+  - FOR:
+      grammar_id: tiferet_dialect
+
+  - WHILE:
+      grammar_id: tiferet_dialect
+
+  - TRY:
+      grammar_id: tiferet_dialect
+
+  - EXCEPT:
+      grammar_id: tiferet_dialect
+
+  - FINALLY:
+      grammar_id: tiferet_dialect
+
+  - WITH:
+      grammar_id: tiferet_dialect
+
+  - ASSERT:
+      grammar_id: tiferet_dialect
+
+  - PASS:
+      grammar_id: tiferet_dialect
+
+  - RAISE:
+      grammar_id: tiferet_dialect
+
+  - CONTINUE:
+      grammar_id: tiferet_dialect
+
+  - BREAK:
+      grammar_id: tiferet_dialect
+
+  - NOT:
+      grammar_id: tiferet_dialect
+
+  - AND:
+      grammar_id: tiferet_dialect
+
+  - OR:
+      grammar_id: tiferet_dialect
+
+  - IN:
+      grammar_id: tiferet_dialect
+
+  - IS:
+      grammar_id: tiferet_dialect
+
+  - NONE:
+      grammar_id: tiferet_dialect
+
+  - ASYNC:
+      grammar_id: tiferet_dialect
+
+  - AWAIT:
+      grammar_id: tiferet_dialect
+
+  - DEL:
+      grammar_id: tiferet_dialect
+
+  - LAMBDA:
+      grammar_id: tiferet_dialect
+
+  - INDENT:
+      grammar_id: tiferet_dialect
+
+  - DEDENT:
+      grammar_id: tiferet_dialect

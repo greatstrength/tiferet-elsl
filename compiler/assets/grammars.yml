@@ -1,0 +1,31 @@
+grammars:
+  tiferet_dialect:
+    parent_ids: []
+    start: module
+    ignore: " \t"
+    layout:
+      block_tokens:
+        - CLASS
+        - DEF
+        - IF
+        - ELIF
+        - ELSE
+        - FOR
+        - WHILE
+        - TRY
+        - EXCEPT
+        - FINALLY
+        - WITH
+      open_delimiters:
+        - LPAREN
+        - LBRACK
+        - LBRACE
+      close_delimiters:
+        - RPAREN
+        - RBRACK
+        - RBRACE
+      newline_token: NEWLINE
+      suppress_newline_in_delimiters: true
+      indent_token: INDENT
+      dedent_token: DEDENT
+      tab_size: 4
