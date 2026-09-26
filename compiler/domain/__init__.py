@@ -15,3 +15,5 @@ from .codegen import (
     SnippetData,
 )
 from .lexer import Token
+from .semantic import SymbolKind, Symbol, Scope, ResolvedName, UnresolvedName, ResolutionResult
+from .typecheck import TypeCheckError
