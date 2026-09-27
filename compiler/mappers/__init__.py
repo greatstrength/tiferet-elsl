@@ -24,6 +24,15 @@ from ..domain.ast import (
     Type as TypeModel,
     ParamList as ParamListModel,
 )
+from .artifact import (
+    ArtifactDeclarationAggregate,
+    ArtifactDeclarationAggregate as ArtifactDecl,
+    ArtifactStatementAggregate,
+    ArtifactStatementAggregate as ArtifactStmt,
+    SnippetStatementAggregate,
+    SnippetStatementAggregate as SnippetStmt,
+)
+from ..domain.artifact import ArtifactDeclaration
 from .semantic import ScopeAggregate, ScopeAggregate as SymbolScope
 from ..domain.semantic import (
     SYMBOL_KIND_ATTRIBUTE,
