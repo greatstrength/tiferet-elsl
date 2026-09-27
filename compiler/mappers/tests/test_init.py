@@ -3,9 +3,18 @@
 # *** imports
 
 # ** app
+import compiler.domain.artifact as domain_artifact
 import compiler.domain.ast as domain_ast
 import compiler.mappers as mappers
-from compiler.mappers import Decl, Expr, Stmt
+from compiler.mappers import (
+    ArtifactDecl,
+    ArtifactDeclaration,
+    ArtifactStmt,
+    Decl,
+    Expr,
+    SnippetStmt,
+    Stmt,
+)
 
 # *** tests
 
@@ -19,6 +28,7 @@ def test_mappers_re_export_domain_node_types() -> None:
     assert mappers.Declaration is domain_ast.Declaration
     assert mappers.Statement is domain_ast.Statement
     assert mappers.Expression is domain_ast.Expression
+    assert mappers.ArtifactDeclaration is domain_artifact.ArtifactDeclaration
 
 # ** test: mappers_domain_types_are_not_aggregates
 def test_mappers_domain_types_are_not_aggregates() -> None:
@@ -36,3 +46,12 @@ def test_mappers_domain_types_are_not_aggregates() -> None:
     assert issubclass(mappers.DeclarationAggregate, domain_ast.Declaration)
     assert issubclass(mappers.StatementAggregate, domain_ast.Statement)
     assert issubclass(mappers.ExpressionAggregate, domain_ast.Expression)
+    assert ArtifactDecl is mappers.ArtifactDeclarationAggregate
+    assert ArtifactStmt is mappers.ArtifactStatementAggregate
+    assert SnippetStmt is mappers.SnippetStatementAggregate
+    assert ArtifactDeclaration is mappers.ArtifactDeclaration
+    assert mappers.ArtifactDeclaration is not mappers.ArtifactDeclarationAggregate
+    assert issubclass(
+        mappers.ArtifactDeclarationAggregate,
+        domain_artifact.ArtifactDeclaration,
+    )
