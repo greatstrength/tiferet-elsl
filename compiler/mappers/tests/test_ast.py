@@ -3,8 +3,15 @@
 # *** imports
 
 # ** app
-from ...domain.ast import TypeKind
-from ..ast import ParamListAggregate, TypeAggregate, _as_list
+from ...domain.ast import ExprKind, StatementKind, TypeKind
+from ..ast import (
+    DeclarationAggregate as Decl,
+    ExpressionAggregate as Expr,
+    ParamListAggregate,
+    StatementAggregate as Stmt,
+    TypeAggregate,
+    _as_list,
+)
 
 # *** tests
 
@@ -212,3 +219,247 @@ def test_as_list_none_list_scalar() -> None:
     assert _as_list(None) == []
     assert _as_list([1]) == [1]
     assert _as_list(1) == [1]
+
+# ** test: collect_import_names_single
+def test_collect_import_names_single() -> None:
+    '''
+    Test that a name expression contributes its name.
+    '''
+
+    # A single imported name is returned as a one-item list.
+    names = Expr.collect_import_names(Expr.new_name_expr('DomainEvent'))
+    assert names == ['DomainEvent']
+
+# ** test: collect_import_names_none
+def test_collect_import_names_none() -> None:
+    '''
+    Test that a missing expression contributes no names.
+    '''
+
+    # None is an empty import list.
+    assert Expr.collect_import_names(None) == []
+
+# ** test: collect_import_names_multi
+def test_collect_import_names_multi() -> None:
+    '''
+    Test that nested multi-imports flatten in order.
+    '''
+
+    # Nest three names under import-multi nodes.
+    expr = Expr.new_import_expr_multi(
+        Expr.new_import_expr_multi(
+            Expr.new_name_expr('DomainEvent'),
+            'a',
+        ),
+        'TiferetError',
+    )
+
+    # The walk returns each name from left to right.
+    assert Expr.collect_import_names(expr) == [
+        'DomainEvent',
+        'a',
+        'TiferetError',
+    ]
+
+# ** test: collect_import_names_aliased
+def test_collect_import_names_aliased() -> None:
+    '''
+    Test that an import-as expression returns only the alias.
+    '''
+
+    # Alias an imported name.
+    expr = Expr.new_import_expr_as(
+        Expr.new_name_expr('typing'),
+        't',
+    )
+
+    # Only the alias is collected.
+    assert expr.kind == ExprKind.IMPORT_AS
+    assert Expr.collect_import_names(expr) == ['t']
+
+# ** test: collect_import_names_multi_with_alias
+def test_collect_import_names_multi_with_alias() -> None:
+    '''
+    Test that a multi-import containing an alias flattens to the visible names.
+    '''
+
+    # Combine an aliased name with a following name.
+    expr = Expr.new_import_expr_multi(
+        Expr.new_import_expr_as(
+            Expr.new_name_expr('typing.List'),
+            'List',
+        ),
+        'Any',
+    )
+
+    # The alias replaces the original name, then the next name follows.
+    assert Expr.collect_import_names(expr) == ['List', 'Any']
+
+# ** test: collect_import_names_unknown_kind
+def test_collect_import_names_unknown_kind() -> None:
+    '''
+    Test that a call expression contributes no import names.
+    '''
+
+    # A call is not an import form.
+    expr = Expr.new_call_expr(Expr.new_name_expr('fn'))
+    assert expr.kind == ExprKind.CALL
+    assert Expr.collect_import_names(expr) == []
+
+# ** test: new_try_stmt_stores_finally
+def test_new_try_stmt_stores_finally() -> None:
+    '''
+    Test that a try statement stores its finally body.
+    '''
+
+    # Build a try with a finally statement.
+    final = Stmt.new_pass_stmt()
+    stmt = Stmt.new_try_stmt(
+        Stmt.new_pass_stmt(),
+        finally_body=final,
+    )
+
+    # The finally body is stored, not dropped.
+    assert stmt.kind == StatementKind.TRY_EXCEPT
+    assert stmt.finally_body == [final]
+
+# ** test: new_try_stmt_no_finally
+def test_new_try_stmt_no_finally() -> None:
+    '''
+    Test that an omitted finally body is an empty list.
+    '''
+
+    # Omit the finally body.
+    stmt = Stmt.new_try_stmt(Stmt.new_pass_stmt())
+    assert stmt.finally_body == []
+
+# ** test: new_double_star_expr
+def test_new_double_star_expr() -> None:
+    '''
+    Test that a double-star expression stores the operand name.
+    '''
+
+    # Star a kwargs name.
+    expr = Expr.new_double_star_expr(Expr.new_name_expr('kwargs'))
+    assert expr.kind == ExprKind.DOUBLE_STAR_EXPR
+    assert expr.left.name == 'kwargs'
+
+# ** test: new_star_expr_distinct_from_double
+def test_new_star_expr_distinct_from_double() -> None:
+    '''
+    Test that star and double-star expressions use distinct kinds.
+    '''
+
+    # Build both star forms.
+    star = Expr.new_star_expr(Expr.new_name_expr('args'))
+    double = Expr.new_double_star_expr(Expr.new_name_expr('kwargs'))
+
+    # The kinds are distinct.
+    assert star.kind == ExprKind.STAR_EXPR
+    assert star.kind != double.kind
+
+# ** test: param_list_set_default_clears_required
+def test_param_list_set_default_clears_required() -> None:
+    '''
+    Test that setting a default stores it and clears required.
+    '''
+
+    # Assign a default to a required parameter.
+    param = ParamListAggregate.new('id')
+    default = Expr.new_none_expr()
+    param.set_default(default)
+
+    # The default is stored and the parameter is no longer required.
+    assert param.default is default
+    assert param.required is False
+
+# ** test: new_name_or_literal_bool_str_num
+def test_new_name_or_literal_bool_str_num() -> None:
+    '''
+    Test that bool strings, other strings, and integers classify correctly.
+    '''
+
+    # Classify a bool string, a string, and an integer.
+    assert Expr.new_name_or_literal_expr('True').kind == ExprKind.BOOL_VAL
+    assert Expr.new_name_or_literal_expr('hello').kind == ExprKind.STR_VAL
+    number = Expr.new_name_or_literal_expr(3)
+    assert number.kind == ExprKind.NUM_VAL
+    assert number.value == '3'
+
+# ** test: new_operator_expr_add_and_unknown
+def test_new_operator_expr_add_and_unknown() -> None:
+    '''
+    Test that a plus operator is add and an unknown operator is a name.
+    '''
+
+    # Build a known operator and an unknown operator.
+    left = Expr.new_name_expr('a')
+    right = Expr.new_name_expr('b')
+    added = Expr.new_operator_expr('+', left, right)
+    unknown = Expr.new_operator_expr('??', left, right)
+
+    # Plus maps to add; anything else is a name that keeps the operator text.
+    assert added.kind == ExprKind.ADD
+    assert unknown.kind == ExprKind.NAME
+    assert unknown.value == '??'
+
+# ** test: new_attribute_expr_preserves_receiver
+def test_new_attribute_expr_preserves_receiver() -> None:
+    '''
+    Test that an attribute expression keeps the receiver and the attribute name.
+    '''
+
+    # Build an attribute on a receiver.
+    receiver = Expr.new_name_expr('self')
+    attr = Expr.new_attribute_expr(receiver, 'name')
+
+    # The receiver is the left child and the attribute is the name.
+    assert attr.left is receiver
+    assert attr.name == 'name'
+
+# ** test: new_module_and_func_decl
+def test_new_module_and_func_decl() -> None:
+    '''
+    Test that a module body is a list and a function type is a type aggregate.
+    '''
+
+    # Wrap one module statement and attach a function type.
+    body = Stmt.new_pass_stmt()
+    module = Decl.new_module_decl('mod', code=body)
+    func_type = TypeAggregate.new_func_type()
+    func = Decl.new_func_decl('run', type=func_type)
+
+    # The module body is a list and the function type is the aggregate.
+    assert isinstance(module.code, list)
+    assert module.code == [body]
+    assert isinstance(func.type, TypeAggregate)
+    assert func.type is func_type
+
+# ** test: new_class_decl_wraps_members
+def test_new_class_decl_wraps_members() -> None:
+    '''
+    Test that a class declaration is a class type with a member list.
+    '''
+
+    # Wrap one class member.
+    member = Stmt.new_pass_stmt()
+    decl = Decl.new_class_decl('Error', None, None, member)
+
+    # The type is a class and the members are a list.
+    assert decl.type.kind == TypeKind.CLASS
+    assert isinstance(decl.code, list)
+    assert decl.code == [member]
+
+# ** test: new_if_stmt_normalizes_body
+def test_new_if_stmt_normalizes_body() -> None:
+    '''
+    Test that a single if body becomes a one-element list.
+    '''
+
+    # Pass one statement as the body.
+    body = Stmt.new_pass_stmt()
+    stmt = Stmt.new_if_stmt(Expr.new_name_expr('flag'), body)
+
+    # The body is a one-element list.
+    assert len(stmt.body) == 1
+    assert stmt.body[0] is body
