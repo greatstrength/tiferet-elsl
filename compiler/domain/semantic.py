@@ -3,8 +3,7 @@
 # *** imports
 
 # ** core
-from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 # ** infra
 from pydantic import Field
@@ -12,34 +11,28 @@ from pydantic import Field
 # ** app
 from tiferet.domain.core import DomainObject
 
-# *** enums
+# *** constants
 
-# ** enum: symbol_kind
-class SymbolKind(str, Enum):
-    '''
-    Enumeration of valid symbol kinds in the Tiferet symbol table.
-    '''
+# ** constant: symbol_kind_module
+SYMBOL_KIND_MODULE = 'module'
 
-    # * attribute: module
-    MODULE = 'module'
+# ** constant: symbol_kind_import
+SYMBOL_KIND_IMPORT = 'import'
 
-    # * attribute: import
-    IMPORT = 'import'
+# ** constant: symbol_kind_class_def
+SYMBOL_KIND_CLASS_DEF = 'class_def'
 
-    # * attribute: class_def
-    CLASS_DEF = 'class_def'
+# ** constant: symbol_kind_method
+SYMBOL_KIND_METHOD = 'method'
 
-    # * attribute: method
-    METHOD = 'method'
+# ** constant: symbol_kind_attribute
+SYMBOL_KIND_ATTRIBUTE = 'attribute'
 
-    # * attribute: attribute
-    ATTRIBUTE = 'attribute'
+# ** constant: symbol_kind_parameter
+SYMBOL_KIND_PARAMETER = 'parameter'
 
-    # * attribute: parameter
-    PARAMETER = 'parameter'
-
-    # * attribute: variable
-    VARIABLE = 'variable'
+# ** constant: symbol_kind_variable
+SYMBOL_KIND_VARIABLE = 'variable'
 
 # *** models
 
@@ -59,7 +52,15 @@ class Symbol(DomainObject):
     )
 
     # * attribute: kind
-    kind: SymbolKind = Field(
+    kind: Literal[
+        'module',
+        'import',
+        'class_def',
+        'method',
+        'attribute',
+        'parameter',
+        'variable',
+    ] = Field(
         ...,
         description='What the symbol represents.',
     )
@@ -98,9 +99,17 @@ class Scope(DomainObject):
     )
 
     # * attribute: kind
-    kind: SymbolKind = Field(
+    kind: Literal[
+        'module',
+        'import',
+        'class_def',
+        'method',
+        'attribute',
+        'parameter',
+        'variable',
+    ] = Field(
         ...,
-        description='Scope kind (`MODULE`, `CLASS_DEF`, or `METHOD`).',
+        description='Scope kind (`module`, `class_def`, or `method`).',
     )
 
     # * attribute: path

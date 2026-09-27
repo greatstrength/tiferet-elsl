@@ -8,11 +8,17 @@ from pydantic import ValidationError
 
 # ** app
 from ..semantic import (
+    SYMBOL_KIND_ATTRIBUTE,
+    SYMBOL_KIND_CLASS_DEF,
+    SYMBOL_KIND_IMPORT,
+    SYMBOL_KIND_METHOD,
+    SYMBOL_KIND_MODULE,
+    SYMBOL_KIND_PARAMETER,
+    SYMBOL_KIND_VARIABLE,
     ResolutionResult,
     ResolvedName,
     Scope,
     Symbol,
-    SymbolKind,
     UnresolvedName,
 )
 
@@ -21,25 +27,30 @@ from ..semantic import (
 # ** test: symbol_kind_values
 def test_symbol_kind_values() -> None:
     '''
-    Test that every SymbolKind member equals its declared string and that there are no extras.
+    Test that every symbol-kind constant equals its declared string.
     '''
 
     # Define the expected symbol-kind vocabulary.
     expected = {
-        'MODULE': 'module',
-        'IMPORT': 'import',
-        'CLASS_DEF': 'class_def',
-        'METHOD': 'method',
-        'ATTRIBUTE': 'attribute',
-        'PARAMETER': 'parameter',
-        'VARIABLE': 'variable',
+        SYMBOL_KIND_MODULE: 'module',
+        SYMBOL_KIND_IMPORT: 'import',
+        SYMBOL_KIND_CLASS_DEF: 'class_def',
+        SYMBOL_KIND_METHOD: 'method',
+        SYMBOL_KIND_ATTRIBUTE: 'attribute',
+        SYMBOL_KIND_PARAMETER: 'parameter',
+        SYMBOL_KIND_VARIABLE: 'variable',
     }
 
-    # Assert the member count and each string value.
-    assert len(SymbolKind) == 7
-    assert {member.name: member.value for member in SymbolKind} == expected
-    for name, value in expected.items():
-        assert SymbolKind[name] == value
+    # Assert each constant is its string value.
+    assert expected == {
+        'module': 'module',
+        'import': 'import',
+        'class_def': 'class_def',
+        'method': 'method',
+        'attribute': 'attribute',
+        'parameter': 'parameter',
+        'variable': 'variable',
+    }
 
 # ** test: symbol_creation
 def test_symbol_creation() -> None:
@@ -50,13 +61,13 @@ def test_symbol_creation() -> None:
     # Construct a class symbol with only the required fields.
     symbol = Symbol(
         name='Ping',
-        kind=SymbolKind.CLASS_DEF,
+        kind=SYMBOL_KIND_CLASS_DEF,
         scope_path='module',
     )
 
     # Assert the required fields and the unset optionals.
     assert symbol.name == 'Ping'
-    assert symbol.kind == SymbolKind.CLASS_DEF
+    assert symbol.kind == SYMBOL_KIND_CLASS_DEF
     assert symbol.scope_path == 'module'
     assert symbol.type_annotation is None
     assert symbol.source_module is None
@@ -70,7 +81,7 @@ def test_symbol_creation_with_type_annotation() -> None:
     # Construct a symbol with both optional fields set.
     symbol = Symbol(
         name='List',
-        kind=SymbolKind.IMPORT,
+        kind=SYMBOL_KIND_IMPORT,
         scope_path='module',
         type_annotation='str',
         source_module='typing',
@@ -89,13 +100,13 @@ def test_scope_creation() -> None:
     # Construct a module scope with only the required fields.
     scope = Scope(
         name='module',
-        kind=SymbolKind.MODULE,
+        kind=SYMBOL_KIND_MODULE,
         path='module',
     )
 
     # Assert the empty maps and absent parent.
     assert scope.name == 'module'
-    assert scope.kind == SymbolKind.MODULE
+    assert scope.kind == SYMBOL_KIND_MODULE
     assert scope.path == 'module'
     assert scope.symbols == {}
     assert scope.children == {}
@@ -110,14 +121,14 @@ def test_scope_creation_with_parent() -> None:
     # Construct a parameter symbol defined in the nested method scope.
     symbol = Symbol(
         name='id',
-        kind=SymbolKind.PARAMETER,
+        kind=SYMBOL_KIND_PARAMETER,
         scope_path='module.Ping.execute',
     )
 
     # Construct a method scope under its class parent.
     scope = Scope(
         name='execute',
-        kind=SymbolKind.METHOD,
+        kind=SYMBOL_KIND_METHOD,
         path='module.Ping.execute',
         parent_path='module.Ping',
         symbols={'id': symbol},
@@ -203,6 +214,20 @@ def test_resolution_result_with_entries() -> None:
     assert result.resolved == [resolved]
     assert result.unresolved == [unresolved]
 
+# ** test: symbol_kind_rejects_unknown
+def test_symbol_kind_rejects_unknown() -> None:
+    '''
+    Test that a symbol kind outside the declared choices raises ValidationError.
+    '''
+
+    # An unknown kind must fail the Literal restriction.
+    with pytest.raises(ValidationError):
+        Symbol(
+            name='Ping',
+            kind='not_a_kind',
+            scope_path='module',
+        )
+
 # ** test: symbol_missing_name_raises
 def test_symbol_missing_name_raises() -> None:
     '''
@@ -211,7 +236,7 @@ def test_symbol_missing_name_raises() -> None:
 
     # Omitting the required name must raise ValidationError.
     with pytest.raises(ValidationError):
-        Symbol(kind=SymbolKind.CLASS_DEF, scope_path='module')
+        Symbol(kind=SYMBOL_KIND_CLASS_DEF, scope_path='module')
 
 # ** test: scope_missing_path_raises
 def test_scope_missing_path_raises() -> None:
@@ -221,7 +246,7 @@ def test_scope_missing_path_raises() -> None:
 
     # Omitting the required path must raise ValidationError.
     with pytest.raises(ValidationError):
-        Scope(name='module', kind=SymbolKind.MODULE)
+        Scope(name='module', kind=SYMBOL_KIND_MODULE)
 
 # ** test: resolved_name_missing_required_raises
 def test_resolved_name_missing_required_raises() -> None:
