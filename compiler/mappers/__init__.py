@@ -9,6 +9,20 @@ from .ast import (
     TypeAggregate as Type,
     ParamListAggregate,
     ParamListAggregate as ParamList,
+    DeclarationAggregate,
+    DeclarationAggregate as Decl,
+    ExpressionAggregate,
+    ExpressionAggregate as Expr,
+    StatementAggregate,
+    StatementAggregate as Stmt,
+)
+from ..domain.ast import (
+    Declaration,
+    Statement,
+    Expression,
+    ExprKind,
+    Type as TypeModel,
+    ParamList as ParamListModel,
 )
 from .semantic import ScopeAggregate, ScopeAggregate as SymbolScope
 from ..domain.semantic import (
