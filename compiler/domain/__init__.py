@@ -3,7 +3,17 @@
 # *** exports
 
 # ** app
-from .ast import TypeKind, ExprKind, StatementKind, Type, ParamList
+from .ast import (
+    TypeKind,
+    ExprKind,
+    StatementKind,
+    Type,
+    ParamList,
+    Expression,
+    Declaration,
+    Statement,
+)
+from .artifact import ArtifactDeclaration, ArtifactStatement, SnippetStatement
 from .codegen import (
     CallableData,
     CollaboratorData,
