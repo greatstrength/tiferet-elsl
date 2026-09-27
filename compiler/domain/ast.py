@@ -287,6 +287,53 @@ class ExprKind(str, Enum):
     # * attribute: dict_entry
     DICT_ENTRY = 'dict_entry'
 
+# *** functions
+
+# ** function: encode_block
+def encode_block(stmts: Optional[List['Statement']] = None) -> str:
+    '''
+    Encode a statement list, dropping empty encodings.
+
+    :param stmts: The statements to encode.
+    :type stmts: Optional[List['Statement']]
+    :return: A bracketed, comma-separated encoding.
+    :rtype: str
+    '''
+
+    # Keep only statements whose own encoding is non-empty.
+    parts = []
+    for current in stmts or []:
+        encoded = current.encode()
+        if encoded:
+            parts.append(encoded)
+
+    # Return the bracketed block.
+    return '[' + ', '.join(parts) + ']'
+
+# ** function: encode_handlers
+def encode_handlers(handlers: Optional[List['Statement']] = None) -> str:
+    '''
+    Encode except handlers, with or without an exception type.
+
+    :param handlers: The handler statements.
+    :type handlers: Optional[List['Statement']]
+    :return: A bracketed, comma-separated handler encoding.
+    :rtype: str
+    '''
+
+    # Format each handler from its exception expression and body.
+    parts = []
+    for handler in handlers or []:
+        exc = handler.expr.encode() if handler.expr else ''
+        body = encode_block(handler.body)
+        if exc:
+            parts.append(f'Except({exc}, {body})')
+        else:
+            parts.append(f'Except({body})')
+
+    # Return the bracketed handler list.
+    return '[' + ', '.join(parts) + ']'
+
 # *** models
 
 # ** model: param_list
@@ -1472,53 +1519,6 @@ class Statement(DomainObject):
 
         # Comments, snippets, artifacts, imports, print, and block do not encode.
         return ''
-
-# *** functions
-
-# ** function: encode_block
-def encode_block(stmts: Optional[List[Statement]] = None) -> str:
-    '''
-    Encode a statement list, dropping empty encodings.
-
-    :param stmts: The statements to encode.
-    :type stmts: Optional[List[Statement]]
-    :return: A bracketed, comma-separated encoding.
-    :rtype: str
-    '''
-
-    # Keep only statements whose own encoding is non-empty.
-    parts = []
-    for current in stmts or []:
-        encoded = current.encode()
-        if encoded:
-            parts.append(encoded)
-
-    # Return the bracketed block.
-    return '[' + ', '.join(parts) + ']'
-
-# ** function: encode_handlers
-def encode_handlers(handlers: Optional[List[Statement]] = None) -> str:
-    '''
-    Encode except handlers, with or without an exception type.
-
-    :param handlers: The handler statements.
-    :type handlers: Optional[List[Statement]]
-    :return: A bracketed, comma-separated handler encoding.
-    :rtype: str
-    '''
-
-    # Format each handler from its exception expression and body.
-    parts = []
-    for handler in handlers or []:
-        exc = handler.expr.encode() if handler.expr else ''
-        body = encode_block(handler.body)
-        if exc:
-            parts.append(f'Except({exc}, {body})')
-        else:
-            parts.append(f'Except({body})')
-
-    # Return the bracketed handler list.
-    return '[' + ', '.join(parts) + ']'
 
 # Resolve forward references once every AST model exists.
 Type.model_rebuild()
