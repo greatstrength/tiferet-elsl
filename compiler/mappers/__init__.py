@@ -32,6 +32,12 @@ from .artifact import (
     SnippetStatementAggregate,
     SnippetStatementAggregate as SnippetStmt,
 )
+from .transfer import (
+    TypeTransferObject,
+    ParamListTransferObject,
+    DeclarationTransferObject,
+    StatementTransferObject,
+)
 from ..domain.artifact import ArtifactDeclaration
 from .semantic import ScopeAggregate, ScopeAggregate as SymbolScope
 from ..domain.semantic import (
