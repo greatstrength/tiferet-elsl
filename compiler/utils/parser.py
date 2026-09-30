@@ -1,10 +1,13 @@
-"""Scanner Parser Utility - TiferetParser (tiferet-ly adapter)"""
+"""Scanner Parser Utility - PlyParser (tiferet-ly adapter)"""
 
 # *** imports
 
 # ** core
 import re
 from typing import Any, Callable, List, Optional, Tuple
+
+# ** infra
+from tiferet_ly.utils.parse import PlyParser as LyPlyParser
 
 # ** app
 from ..mappers import Type
@@ -76,30 +79,6 @@ def parse_see_guide_path(token_value: str) -> Optional[str]:
     # Drop a whitespace-only capture.
     path = match.group(1).strip()
     return path or None
-
-# ** function: apply_annotations
-def apply_annotations(decl: Any, annots: Optional[list]) -> None:
-    '''
-    Store annotations and promote the first SEE note to ``guide_path``.
-
-    :param decl: The declaration to mutate.
-    :type decl: Any
-    :param annots: Structured SEE, OBSOLETE, or TODO notes, or None.
-    :type annots: Optional[list]
-    '''
-
-    # Store the list as given, including when it is missing.
-    decl.annotations = annots
-
-    # The first SEE wins. Leave guide_path unset when that note has no path.
-    for annot in annots or []:
-        if not isinstance(annot, dict) or annot.get('kind') != 'SEE':
-            continue
-
-        path = parse_see_guide_path(annot.get('text', ''))
-        if path:
-            decl.guide_path = path
-        break
 
 # ** function: parse_member_kind
 def parse_member_kind(artifact_member_value: str) -> str:
@@ -261,34 +240,6 @@ def render_lambda_body(expr: Optional[Any]) -> str:
     # Anything else uses a name or a stored value when one is present.
     return expr.name or expr.value or ''
 
-# ** function: attach_dangling_else
-def attach_dangling_else(stmts: List[Any], else_body: List[Any]) -> None:
-    '''
-    Attach an else body to the innermost open if in a statement list.
-
-    :param stmts: The statement list whose last node may be an if.
-    :type stmts: List[Any]
-    :param else_body: The else statements to attach.
-    :type else_body: List[Any]
-    '''
-
-    # An empty list has nowhere to attach.
-    if not stmts:
-        return
-
-    # Walk a chain of if nodes that each hold one nested if.
-    target = stmts[-1]
-    while (
-        target.is_if_else
-        and len(target.else_body) == 1
-        and target.else_body[0].is_if_else
-    ):
-        target = target.else_body[0]
-
-    # Attach only when the landed node is itself an if.
-    if target.is_if_else:
-        target.else_body = else_body
-
 # ** function: make_position_helpers
 def make_position_helpers(
     source_text: str,
@@ -400,3 +351,68 @@ def make_position_helpers(
         set_last_ident_pos,
         get_last_ident_pos,
     )
+
+# *** utils
+
+# ** util: ply_parser
+class PlyParser(LyPlyParser):
+    '''
+    Extend the published tiferet-ly parser with dialect node mutations.
+
+    Header, type, and expression helpers stay functions because they do not
+    mutate their inputs. Annotation and dangling-else updates live here.
+    '''
+
+    # * method: apply_annotations (static)
+    @staticmethod
+    def apply_annotations(decl: Any, annots: Optional[list]) -> None:
+        '''
+        Store annotations and promote the first SEE note to ``guide_path``.
+
+        :param decl: The declaration to mutate.
+        :type decl: Any
+        :param annots: Structured SEE, OBSOLETE, or TODO notes, or None.
+        :type annots: Optional[list]
+        '''
+
+        # Store the list as given, including when it is missing.
+        decl.annotations = annots
+
+        # The first SEE wins. Leave guide_path unset when that note has no path.
+        for annot in annots or []:
+            if not isinstance(annot, dict) or annot.get('kind') != 'SEE':
+                continue
+
+            path = parse_see_guide_path(annot.get('text', ''))
+            if path:
+                decl.guide_path = path
+            break
+
+    # * method: attach_dangling_else (static)
+    @staticmethod
+    def attach_dangling_else(stmts: List[Any], else_body: List[Any]) -> None:
+        '''
+        Attach an else body to the innermost open if in a statement list.
+
+        :param stmts: The statement list whose last node may be an if.
+        :type stmts: List[Any]
+        :param else_body: The else statements to attach.
+        :type else_body: List[Any]
+        '''
+
+        # An empty list has nowhere to attach.
+        if not stmts:
+            return
+
+        # Walk a chain of if nodes that each hold one nested if.
+        target = stmts[-1]
+        while (
+            target.is_if_else
+            and len(target.else_body) == 1
+            and target.else_body[0].is_if_else
+        ):
+            target = target.else_body[0]
+
+        # Attach only when the landed node is itself an if.
+        if target.is_if_else:
+            target.else_body = else_body

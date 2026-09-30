@@ -5,13 +5,15 @@
 # ** core
 from types import SimpleNamespace
 
+# ** infra
+from tiferet_ly.utils.parse import PlyParser as LyPlyParser
+
 # ** app
 from ...domain.ast import ExprKind, TypeKind
 from .. import parser as parser_module
 from ..parser import (
     GRAMMAR_ID,
-    apply_annotations,
-    attach_dangling_else,
+    PlyParser,
     flatten_args_list,
     get_attribute_type,
     make_position_helpers,
@@ -27,12 +29,16 @@ from ..parser import (
 # ** test: grammar_id
 def test_grammar_id() -> None:
     '''
-    Test that the dialect id is named and this story adds no parser class.
+    Test the dialect id and that mutations live on the published adapter.
     '''
 
     # The constant names the dialect grammar. TiferetParser belongs to #21.
     assert GRAMMAR_ID == 'tiferet_dialect'
     assert not hasattr(parser_module, 'TiferetParser')
+    assert issubclass(PlyParser, LyPlyParser)
+    assert PlyParser is not LyPlyParser
+    assert not hasattr(parser_module, 'apply_annotations')
+    assert not hasattr(parser_module, 'attach_dangling_else')
 
 # ** test: parse_artifact_header
 def test_parse_artifact_header() -> None:
@@ -172,7 +178,7 @@ def test_apply_annotations_promotes_see_guide_path() -> None:
         {'kind': 'SEE', 'text': '# >> see: docs/guides/other.md#x'},
     ]
     decl = SimpleNamespace()
-    apply_annotations(decl, annots)
+    PlyParser.apply_annotations(decl, annots)
 
     # The list is stored as given, and the first SEE is the guide path.
     assert decl.annotations is annots
@@ -187,7 +193,7 @@ def test_apply_annotations_no_see_leaves_guide_path_unset() -> None:
     # Store the notes without inventing a guide path.
     annots = [{'kind': 'TODO', 'text': 'later'}]
     decl = SimpleNamespace()
-    apply_annotations(decl, annots)
+    PlyParser.apply_annotations(decl, annots)
 
     # The notes are stored, and no SEE means no guide path attribute.
     assert decl.annotations is annots
@@ -246,7 +252,7 @@ def test_attach_dangling_else_empty() -> None:
 
     # There is no last statement to mutate.
     stmts = []
-    attach_dangling_else(stmts, [SimpleNamespace(is_if_else=False)])
+    PlyParser.attach_dangling_else(stmts, [SimpleNamespace(is_if_else=False)])
     assert stmts == []
 
 # ** test: attach_dangling_else_innermost
@@ -260,7 +266,7 @@ def test_attach_dangling_else_innermost() -> None:
     middle = SimpleNamespace(is_if_else=True, else_body=[inner])
     outer = SimpleNamespace(is_if_else=True, else_body=[middle])
     else_body = [SimpleNamespace(is_if_else=False)]
-    attach_dangling_else([outer], else_body)
+    PlyParser.attach_dangling_else([outer], else_body)
 
     # Only the landed if receives the else body.
     assert inner.else_body is else_body
