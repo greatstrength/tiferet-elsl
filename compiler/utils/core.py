@@ -5,7 +5,7 @@
 # ** core
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
-from typing import Any, ClassVar, Dict, FrozenSet, Iterator, List, Optional
+from typing import Any, Callable, ClassVar, Dict, FrozenSet, Iterator, List, Optional
 
 # ** app
 from ..mappers import (
@@ -1958,6 +1958,405 @@ class ReturnBinaryOpTypeSpecification(Specification):
         # The candidate is a statement; the checked expression is its expr.
         expr = getattr(candidate, 'expr', None)
         return _binary_op_findings(expr, context)
+
+# ** class: permitted_group_specification
+class PermittedGroupSpecification(Specification):
+    '''
+    Permit only a fixed set of tier-1 groups in one component module.
+
+    The permitted names are constructor data. The class does not hard-code an actor dialect.
+    '''
+
+    # * attribute: permitted_groups
+    permitted_groups: FrozenSet[str]
+
+    # * attribute: error_code
+    error_code: str
+
+    # * attribute: module_label
+    module_label: str
+
+    # * init
+    def __init__(self, id: str, applies_to: str,
+                 permitted_groups: Optional[FrozenSet[str]] = None,
+                 error_code: str = 'DISALLOWED_ASSET_GROUP',
+                 module_label: str = 'an assets module') -> None:
+        '''
+        Store the permitted groups and the finding text.
+
+        :param id: The unique attachment id.
+        :type id: str
+        :param applies_to: The visit hook this attachment handles.
+        :type applies_to: str
+        :param permitted_groups: Permitted tier-1 group names, or None for the assets default.
+        :type permitted_groups: Optional[FrozenSet[str]]
+        :param error_code: The finding code for a disallowed group.
+        :type error_code: str
+        :param module_label: The module kind inserted in the finding message.
+        :type module_label: str
+        :return: None
+        :rtype: None
+        '''
+
+        # Store the identity and hook on the attachment base.
+        super().__init__(id=id, applies_to=applies_to)
+
+        # An omitted set is the assets default, not an actor dialect.
+        self.permitted_groups = frozenset(permitted_groups or {
+            'imports',
+            'constants',
+            'functions',
+            'classes',
+            'exports',
+        })
+        self.error_code = error_code
+        self.module_label = module_label
+
+    # * method: evaluate
+    def evaluate(self, candidate: Declaration,
+                 context: ConformanceContext) -> List[Dict]:
+        '''
+        Evaluate the permitted-group rule.
+
+        :param candidate: The artifact header declaration.
+        :type candidate: Declaration
+        :param context: The conformance visit context.
+        :type context: ConformanceContext
+        :return: A disallowed-group finding, or an empty list.
+        :rtype: List[Dict]
+        '''
+
+        # Only tier-1 groups are judged.
+        del context
+        header_decl = candidate
+        if getattr(header_decl, 'artifact_type', None) != '***':
+            return []
+
+        # A permitted name is satisfactory.
+        header_name = getattr(header_decl, 'name', None)
+        if header_name in self.permitted_groups:
+            return []
+
+        # Record the group this module does not permit.
+        permitted = ', '.join(sorted(self.permitted_groups))
+        return [{
+            'error_code': self.error_code,
+            'message': (
+                f"Group '{header_name}' is not permitted in {self.module_label}. "
+                f"Permitted groups are: {permitted}."
+            ),
+            'node': header_decl,
+            'group_name': header_name,
+        }]
+
+# ** class: app_import_specification
+class AppImportSpecification(Specification):
+    '''
+    Permit only constructor-listed component types in an app import group.
+
+    Same-package siblings are allowed unless the constructor turns that off.
+    Events do not instantiate this rule.
+    '''
+
+    # * attribute: allowed_components
+    allowed_components: FrozenSet[str]
+
+    # * attribute: error_code
+    error_code: str
+
+    # * attribute: message
+    message: str
+
+    # * attribute: allow_siblings
+    allow_siblings: bool
+
+    # * attribute: allow_framework_root_alias
+    allow_framework_root_alias: bool
+
+    # * init
+    def __init__(self, id: str, applies_to: str,
+                 error_code: str,
+                 message: str,
+                 allowed_components: Optional[FrozenSet[str]] = None,
+                 allow_siblings: bool = True,
+                 allow_framework_root_alias: bool = False) -> None:
+        '''
+        Store the allowed component types and the finding text.
+
+        :param id: The unique attachment id.
+        :type id: str
+        :param applies_to: The visit hook this attachment handles.
+        :type applies_to: str
+        :param error_code: The finding code for a disallowed import.
+        :type error_code: str
+        :param message: The finding template. It may contain ``{module_path}``.
+        :type message: str
+        :param allowed_components: Component types permitted besides siblings.
+        :type allowed_components: Optional[FrozenSet[str]]
+        :param allow_siblings: Whether a single-dot relative import is allowed.
+        :type allow_siblings: bool
+        :param allow_framework_root_alias: Whether ``from .. import a`` is allowed.
+        :type allow_framework_root_alias: bool
+        :return: None
+        :rtype: None
+        '''
+
+        # Store the identity and hook on the attachment base.
+        super().__init__(id=id, applies_to=applies_to)
+
+        # An omitted component set allows no component types beyond siblings.
+        self.allowed_components = frozenset(allowed_components or [])
+        self.error_code = error_code
+        self.message = message
+        self.allow_siblings = allow_siblings
+        self.allow_framework_root_alias = allow_framework_root_alias
+
+    # * method: evaluate
+    def evaluate(self, candidate: Declaration,
+                 context: ConformanceContext) -> List[Dict]:
+        '''
+        Evaluate app imports under an imports group.
+
+        :param candidate: The artifact header declaration.
+        :type candidate: Declaration
+        :param context: The conformance visit context.
+        :type context: ConformanceContext
+        :return: One finding per disallowed app import.
+        :rtype: List[Dict]
+        '''
+
+        # Only the imports group has an app import sub-group to judge.
+        header_decl = candidate
+        if getattr(header_decl, 'artifact_type', None) != '***':
+            return []
+        if getattr(header_decl, 'name', None) != 'imports':
+            return []
+
+        # Walk each app section and record every disallowed import.
+        findings = []
+        stmt = getattr(context, 'stmt', None)
+        for section in (stmt.body if stmt is not None else None) or []:
+            if not self._is_app_section(section):
+                continue
+            for sub in section.body or []:
+                finding = self._import_finding(sub)
+                if finding is not None:
+                    findings.append(finding)
+
+        # Return every disallowed app import.
+        return findings
+
+    # * method: _is_app_section
+    def _is_app_section(self, section: Statement) -> bool:
+        '''
+        Report whether a statement is the app import section.
+
+        :param section: A statement in the imports group.
+        :type section: Statement
+        :return: True when the statement is an artifact section named app.
+        :rtype: bool
+        '''
+
+        # Only an artifact section named app is judged.
+        return (
+            getattr(section, 'is_artifact', False)
+            and section.decl is not None
+            and section.decl.name == 'app'
+        )
+
+    # * method: _import_finding
+    def _import_finding(self, sub: Statement) -> Optional[Dict]:
+        '''
+        Record a finding for one disallowed import, or skip it.
+
+        :param sub: A statement in the app section.
+        :type sub: Statement
+        :return: A finding, or None when the statement is allowed or not an import.
+        :rtype: Optional[Dict]
+        '''
+
+        # Import-from keeps the module on init_expr. A plain import keeps it on expr.
+        if getattr(sub, 'is_import_from', False):
+            module_path = getattr(sub.init_expr, 'name', None) or ''
+        elif getattr(sub, 'is_import', False):
+            module_path = getattr(sub.expr, 'name', None) or ''
+        else:
+            return None
+        if self._is_allowed(module_path, sub):
+            return None
+
+        # Record the path this dialect does not permit.
+        return {
+            'error_code': self.error_code,
+            'message': self.message.format(module_path=module_path),
+            'node': sub,
+            'module_path': module_path,
+        }
+
+    # * method: _is_allowed
+    def _is_allowed(self, module_path: str, sub: Statement) -> bool:
+        '''
+        Report whether an app import path is allowed.
+
+        :param module_path: The imported module path.
+        :type module_path: str
+        :param sub: The import statement.
+        :type sub: Statement
+        :return: True when any allowance matches.
+        :rtype: bool
+        '''
+
+        # A single leading dot is a same-package sibling, not a parent import.
+        if (
+            self.allow_siblings
+            and module_path.startswith('.')
+            and not module_path.startswith('..')
+        ):
+            return True
+
+        # A listed component may be the path, a prefix, or a dotted segment.
+        if any(
+            module_path == component
+            or module_path.startswith(f'{component}.')
+            or f'.{component}' in module_path
+            for component in self.allowed_components
+        ):
+            return True
+
+        # The framework root alias is the parent import of ``a`` only.
+        return (
+            self.allow_framework_root_alias
+            and module_path == '..'
+            and getattr(sub.expr, 'name', None) == 'a'
+        )
+
+# ** class: required_base_specification
+class RequiredBaseSpecification(Specification):
+    '''
+    Require a typed section's class to declare an acceptable base.
+
+    When no required base is given, any declared base satisfies the rule.
+    A predicate that returns false skips the section.
+    '''
+
+    # * attribute: section_keyword
+    section_keyword: str
+
+    # * attribute: error_code
+    error_code: str
+
+    # * attribute: message
+    message: str
+
+    # * attribute: name_key
+    name_key: Optional[str]
+
+    # * attribute: required_base
+    required_base: Optional[str]
+
+    # * attribute: predicate
+    predicate: Optional[Callable[..., bool]]
+
+    # * init
+    def __init__(self, id: str, applies_to: str,
+                 section_keyword: str,
+                 error_code: str,
+                 message: str,
+                 name_key: Optional[str] = None,
+                 required_base: Optional[str] = None,
+                 predicate: Optional[Callable[..., bool]] = None) -> None:
+        '''
+        Store the section keyword, the acceptable base, and the finding text.
+
+        :param id: The unique attachment id.
+        :type id: str
+        :param applies_to: The visit hook this attachment handles.
+        :type applies_to: str
+        :param section_keyword: The section keyword this rule judges.
+        :type section_keyword: str
+        :param error_code: The finding code for a missing or wrong base.
+        :type error_code: str
+        :param message: The finding template.
+        :type message: str
+        :param name_key: Optional extra finding key for the header name.
+        :type name_key: Optional[str]
+        :param required_base: The required base name, or None when any base satisfies.
+        :type required_base: Optional[str]
+        :param predicate: Optional skip predicate. False skips the rule.
+        :type predicate: Optional[Callable[..., bool]]
+        :return: None
+        :rtype: None
+        '''
+
+        # Store the identity and hook on the attachment base.
+        super().__init__(id=id, applies_to=applies_to)
+
+        # Store each rule argument without interpreting the predicate.
+        self.section_keyword = section_keyword
+        self.error_code = error_code
+        self.message = message
+        self.name_key = name_key
+        self.required_base = required_base
+        self.predicate = predicate
+
+    # * method: evaluate
+    def evaluate(self, candidate: Declaration,
+                 context: ConformanceContext) -> List[Dict]:
+        '''
+        Evaluate the required-base rule.
+
+        :param candidate: The section header declaration.
+        :type candidate: Declaration
+        :param context: The conformance visit context.
+        :type context: ConformanceContext
+        :return: A missing-base finding, or an empty list.
+        :rtype: List[Dict]
+        '''
+
+        # Skip headers that are not this section keyword.
+        header_decl = candidate
+        if getattr(header_decl, 'section_keyword', None) != self.section_keyword:
+            return []
+
+        # Skip when the section has no class declaration.
+        stmt = getattr(context, 'stmt', None)
+        class_decl = stmt.find_class() if stmt is not None else None
+        if class_decl is None:
+            return []
+
+        # A false predicate skips the rule for this class.
+        if self.predicate is not None and not self.predicate(
+            header_decl,
+            context,
+            class_decl,
+        ):
+            return []
+
+        # Any declared base satisfies when no specific base is required.
+        base = class_decl.type.subtype if class_decl.type else None
+        if self.required_base is None and base is not None:
+            return []
+        if (
+            self.required_base is not None
+            and base is not None
+            and base.name == self.required_base
+        ):
+            return []
+
+        # Record the missing or unacceptable base against the section header.
+        finding = {
+            'error_code': self.error_code,
+            'message': self.message.format(
+                header_name=header_decl.name,
+                class_name=class_decl.name,
+                required_base=self.required_base,
+            ),
+            'node': header_decl,
+            'class_name': class_decl.name,
+        }
+        if self.name_key is not None:
+            finding[self.name_key] = header_decl.name
+        return [finding]
 
 # ** class: event_section_specification
 class EventSectionSpecification(Specification):
