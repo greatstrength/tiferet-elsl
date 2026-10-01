@@ -3,11 +3,80 @@
 # *** imports
 
 # ** core
+from importlib import import_module
 from typing import Any, Dict, List, Optional, Tuple
 
 # ** app
 from ..interfaces.optimizer import OptimizerService
 from .core import Rewrite, RewriteContext
+
+# *** constants
+
+# ** constant: optimizer_evt_grp_envelope_id
+OPTIMIZER_EVT_GRP_ENVELOPE_ID = 'optimizer.evt_grp_envelope'
+
+# ** constant: optimizer_evt_grp_envelope_applies_to
+OPTIMIZER_EVT_GRP_ENVELOPE_APPLIES_TO = 'evt_grp'
+
+# ** constant: optimizer_cmpt_envelope_id
+OPTIMIZER_CMPT_ENVELOPE_ID = 'optimizer.cmpt_envelope'
+
+# ** constant: optimizer_cmpt_envelope_applies_to
+OPTIMIZER_CMPT_ENVELOPE_APPLIES_TO = 'cmpt'
+
+# ** constant: optimizer_callable_id
+OPTIMIZER_CALLABLE_ID = 'optimizer.callable'
+
+# ** constant: optimizer_callable_applies_to
+OPTIMIZER_CALLABLE_APPLIES_TO = 'callable'
+
+# *** functions
+
+# ** function: create_optimizer_rewrite
+def create_optimizer_rewrite(flag: str) -> Rewrite:
+    '''
+    Load one rewrite class by flag, the way a flagged dependency is resolved.
+
+    :param flag: The envelope flag: ``evt_grp``, ``cmpt``, or ``callable``.
+    :type flag: str
+    :return: The rewrite for that flag.
+    :rtype: Rewrite
+    '''
+
+    # Map the flag to a module path and class name. Do not name the class object.
+    dependencies = {
+        OPTIMIZER_EVT_GRP_ENVELOPE_APPLIES_TO: {
+            'module_path': 'compiler.utils.optimizer',
+            'class_name': 'EvtGrpEnvelopeRewrite',
+            'id': OPTIMIZER_EVT_GRP_ENVELOPE_ID,
+            'applies_to': OPTIMIZER_EVT_GRP_ENVELOPE_APPLIES_TO,
+        },
+        OPTIMIZER_CMPT_ENVELOPE_APPLIES_TO: {
+            'module_path': 'compiler.utils.optimizer',
+            'class_name': 'CmptEnvelopeRewrite',
+            'id': OPTIMIZER_CMPT_ENVELOPE_ID,
+            'applies_to': OPTIMIZER_CMPT_ENVELOPE_APPLIES_TO,
+        },
+        OPTIMIZER_CALLABLE_APPLIES_TO: {
+            'module_path': 'compiler.utils.optimizer',
+            'class_name': 'CallableRewrite',
+            'id': OPTIMIZER_CALLABLE_ID,
+            'applies_to': OPTIMIZER_CALLABLE_APPLIES_TO,
+        },
+    }
+    dependency = dependencies[flag]
+
+    # Import the named class from its module path.
+    rewrite_cls = getattr(
+        import_module(dependency['module_path']),
+        dependency['class_name'],
+    )
+
+    # Construct with that flag's singular id and applies_to constants.
+    return rewrite_cls(
+        id=dependency['id'],
+        applies_to=dependency['applies_to'],
+    )
 
 # *** classes
 
@@ -195,24 +264,6 @@ class CmptEnvelopeRewrite(Rewrite):
 
         return None
 
-# *** constants
-
-# ** constant: optimizer_rewrite_set
-OPTIMIZER_REWRITE_SET: List[Rewrite] = [
-    EvtGrpEnvelopeRewrite(
-        id='optimizer.evt_grp_envelope',
-        applies_to='evt_grp',
-    ),
-    CmptEnvelopeRewrite(
-        id='optimizer.cmpt_envelope',
-        applies_to='cmpt',
-    ),
-    CallableRewrite(
-        id='optimizer.callable',
-        applies_to='callable',
-    ),
-]
-
 # *** utils
 
 # ** util: yaml_anchor_optimizer
@@ -231,14 +282,21 @@ class YamlAnchorOptimizer(OptimizerService):
         '''
         Store the rewrite set used to collect lists.
 
-        :param rewrites: The rewrite set, or None to use ``OPTIMIZER_REWRITE_SET``.
+        :param rewrites: The rewrite set, or None to load one rewrite per flag.
         :type rewrites: Optional[List[Rewrite]]
         :return: None
         :rtype: None
         '''
 
-        # An omitted list uses the module set so zero-arg DI construction works.
-        self.rewrites = rewrites if rewrites is not None else OPTIMIZER_REWRITE_SET
+        # Omitted rewrites load one instance per flag, evt_grp then cmpt then callable.
+        self.rewrites = rewrites if rewrites is not None else [
+            create_optimizer_rewrite(flag)
+            for flag in (
+                OPTIMIZER_EVT_GRP_ENVELOPE_APPLIES_TO,
+                OPTIMIZER_CMPT_ENVELOPE_APPLIES_TO,
+                OPTIMIZER_CALLABLE_APPLIES_TO,
+            )
+        ]
 
     # * method: match_rewrite
     def match_rewrite(self, hook: str) -> Optional[Rewrite]:

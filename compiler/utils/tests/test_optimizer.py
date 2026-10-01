@@ -7,7 +7,16 @@ import yaml
 
 # ** app
 from ..core import Rewrite
-from ..optimizer import OPTIMIZER_REWRITE_SET, YamlAnchorOptimizer
+from ..optimizer import (
+    OPTIMIZER_CALLABLE_APPLIES_TO,
+    OPTIMIZER_CALLABLE_ID,
+    OPTIMIZER_CMPT_ENVELOPE_APPLIES_TO,
+    OPTIMIZER_CMPT_ENVELOPE_ID,
+    OPTIMIZER_EVT_GRP_ENVELOPE_APPLIES_TO,
+    OPTIMIZER_EVT_GRP_ENVELOPE_ID,
+    YamlAnchorOptimizer,
+    create_optimizer_rewrite,
+)
 
 # *** classes
 
@@ -39,27 +48,45 @@ class _OtherEnvelopeRewrite(Rewrite):
 
 # *** tests
 
-# ** test: optimizer_rewrite_set_order
-def test_optimizer_rewrite_set_order() -> None:
+# ** test: optimizer_rewrite_flags_load_by_reflection
+def test_optimizer_rewrite_flags_load_by_reflection() -> None:
     '''
-    Test that the default rewrite set is the three rows in envelope-then-callable order.
+    Test that zero-arg construction loads one rewrite per flag by reflection.
     '''
 
-    # Zero-arg construction uses the module set so DI does not need a factory argument.
+    # Singular constants keep id and applies_to off the class constructors.
+    assert OPTIMIZER_EVT_GRP_ENVELOPE_ID == 'optimizer.evt_grp_envelope'
+    assert OPTIMIZER_EVT_GRP_ENVELOPE_APPLIES_TO == 'evt_grp'
+    assert OPTIMIZER_CMPT_ENVELOPE_ID == 'optimizer.cmpt_envelope'
+    assert OPTIMIZER_CMPT_ENVELOPE_APPLIES_TO == 'cmpt'
+    assert OPTIMIZER_CALLABLE_ID == 'optimizer.callable'
+    assert OPTIMIZER_CALLABLE_APPLIES_TO == 'callable'
+
+    # Each flag imports its class from module_path and class_name.
+    flags = (
+        OPTIMIZER_EVT_GRP_ENVELOPE_APPLIES_TO,
+        OPTIMIZER_CMPT_ENVELOPE_APPLIES_TO,
+        OPTIMIZER_CALLABLE_APPLIES_TO,
+    )
+    loaded = [create_optimizer_rewrite(flag) for flag in flags]
+    assert [rewrite.id for rewrite in loaded] == [
+        OPTIMIZER_EVT_GRP_ENVELOPE_ID,
+        OPTIMIZER_CMPT_ENVELOPE_ID,
+        OPTIMIZER_CALLABLE_ID,
+    ]
+    assert [rewrite.applies_to for rewrite in loaded] == list(flags)
+    assert [type(rewrite).__name__ for rewrite in loaded] == [
+        'EvtGrpEnvelopeRewrite',
+        'CmptEnvelopeRewrite',
+        'CallableRewrite',
+    ]
+    assert all(type(rewrite).__module__ == 'compiler.utils.optimizer' for rewrite in loaded)
+
+    # Zero-arg construction calls the factory once per flag rather than sharing a constant list.
     optimizer = YamlAnchorOptimizer()
-    assert optimizer.rewrites is OPTIMIZER_REWRITE_SET
-
-    # evt_grp precedes cmpt so a dual-emitted document prefers the legacy envelope.
-    assert [rewrite.id for rewrite in OPTIMIZER_REWRITE_SET] == [
-        'optimizer.evt_grp_envelope',
-        'optimizer.cmpt_envelope',
-        'optimizer.callable',
-    ]
-    assert [rewrite.applies_to for rewrite in OPTIMIZER_REWRITE_SET] == [
-        'evt_grp',
-        'cmpt',
-        'callable',
-    ]
+    again = YamlAnchorOptimizer()
+    assert [rewrite.id for rewrite in optimizer.rewrites] == [rewrite.id for rewrite in loaded]
+    assert optimizer.rewrites[0] is not again.rewrites[0]
 
 # ** test: no_events_passthrough
 def test_no_events_passthrough() -> None:
