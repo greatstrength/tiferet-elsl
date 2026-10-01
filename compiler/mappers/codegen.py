@@ -126,10 +126,18 @@ class SnippetAccumulator(SnippetData, Aggregate):
             self.statements.append(expr_str)
 
     # * method: to_dict
-    def to_dict(self) -> Optional[Dict[str, Any]]:
+    def to_dict(self, role: str = None, **overrides) -> Optional[Dict[str, Any]]:
         '''
         Serialize comments and statements under ``coms`` and ``stmt``.
 
+        This overrides ``Aggregate.to_dict``, so it keeps that signature.
+        The snippet shape is fixed, so ``role`` and ``overrides`` are
+        accepted and ignored rather than passed to ``model_dump``.
+
+        :param role: Accepted for signature compatibility; ignored.
+        :type role: str
+        :param overrides: Accepted for signature compatibility; ignored.
+        :type overrides: dict
         :return: The snippet dict, or None when both lists are empty.
         :rtype: Optional[Dict[str, Any]]
         '''
@@ -158,6 +166,12 @@ class EventAccumulator(EventData, Aggregate):
     execute: Optional[Dict[str, Any]] = Field(
         default=None,
         description='Codegen execute payload. Included only when truthy.',
+    )
+
+    # * attribute: methods
+    methods: Dict[str, Dict[str, Any]] = Field(
+        default_factory=dict,
+        description='Codegen method payloads keyed by method name.',
     )
 
     # * method: add_attribute
@@ -243,7 +257,7 @@ class EventAccumulator(EventData, Aggregate):
         self.methods[name] = data
 
     # * method: to_dict
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self, role: str = None, **overrides) -> Dict[str, Any]:
         '''
         Serialize the class payload, omitting empty optional sections.
 
@@ -252,6 +266,14 @@ class EventAccumulator(EventData, Aggregate):
         set. ``base``, ``maps``, ``kind``, ``implements``, and
         ``collaborators`` are left for the generator.
 
+        This overrides ``Aggregate.to_dict``, so it keeps that signature.
+        The payload shape is fixed, so ``role`` and ``overrides`` are
+        accepted and ignored rather than passed to ``model_dump``.
+
+        :param role: Accepted for signature compatibility; ignored.
+        :type role: str
+        :param overrides: Accepted for signature compatibility; ignored.
+        :type overrides: dict
         :return: The serialized class payload.
         :rtype: Dict[str, Any]
         '''
