@@ -1065,6 +1065,21 @@ class Declaration(DomainObject):
         # No matching method or init member was found.
         return False
 
+    # * method: is_idempotent_delete
+    def is_idempotent_delete(self) -> bool:
+        '''
+        Report whether this method body contains no reachable raise.
+
+        A failing check is not a conformance finding. Callers omit
+        ``idempotent`` rather than recording False.
+
+        :return: True when no raise statement is reachable.
+        :rtype: bool
+        '''
+
+        # Walk the method body, including nested control-flow and snippet bodies.
+        return not any(stmt.contains_raise() for stmt in self.code)
+
     # * method: children (property)
     @property
     def children(self) -> List['Statement']:
@@ -1438,6 +1453,28 @@ class Statement(DomainObject):
 
         # Return the walk order.
         return nodes
+
+    # * method: contains_raise
+    def contains_raise(self) -> bool:
+        '''
+        Report whether this statement or a nested body contains a raise.
+
+        :return: True when a raise is reachable from this statement.
+        :rtype: bool
+        '''
+
+        # This statement is itself a raise.
+        if self.is_raise:
+            return True
+
+        # Descend snippet bodies and each control-flow body.
+        for name in ('body', 'else_body', 'finally_body'):
+            for child in getattr(self, name) or []:
+                if child.contains_raise():
+                    return True
+
+        # No raise was reachable.
+        return False
 
     # * method: visit_role (property)
     @property

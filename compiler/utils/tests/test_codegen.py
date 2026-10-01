@@ -680,6 +680,28 @@ def test_generator_rewrite_set_order():
         ('generator.method_member', 'method'),
     ]
 
-    # Unknown groups dispatch as events. Exports are not a hook.
+    # Unknown groups dispatch as events. The exports skip is a generate concern.
     assert generator.resolve_group_hook('widgets') == 'events'
-    assert generator.resolve_group_hook('exports') == 'events'
+
+# ** test: generate_skips_exports_group
+def test_generate_skips_exports_group():
+    '''
+    Test that generate skips an exports group before it can be emitted as events.
+    '''
+
+    # An exports section would become an event if the skip were removed.
+    exported = _class_decl('Public', [])
+    exports = _group('exports', [
+        _section('public', '** event', [_decl(exported)]),
+    ])
+    events = _event_module().code[0]
+    result = TiferetGenerator().generate(_module(
+        'feature',
+        code=[exports, events],
+    ))
+
+    # Exports is absent from both the component groups and the legacy event map.
+    groups = result['cmpt'].get('grps', [])
+    assert 'exports' not in [group['name'] for group in groups]
+    assert 'public' not in result['evt_grp'].get('evts', {})
+    assert 'get_feature' in result['evt_grp']['evts']

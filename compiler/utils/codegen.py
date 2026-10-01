@@ -23,48 +23,104 @@ from .core import (
 )
 from .docstring import DocstringParser
 
+# *** constants
+
+# ** constant: known_group_hooks
+KNOWN_GROUP_HOOKS: FrozenSet[str] = frozenset({
+    'imports',
+    'functions',
+    'constants',
+    'classes',
+    'models',
+    'mappers',
+    'interfaces',
+    'utils',
+    'contexts',
+    'blueprints',
+    'repos',
+})
+
 # *** functions
 
-# ** function: is_idempotent_delete
-def _is_idempotent_delete(inner: Declaration) -> bool:
+# ** function: build_generator_rewrite_set
+def build_generator_rewrite_set() -> List[Rewrite]:
     '''
-    Report whether a method body contains no reachable raise.
+    Build the published rewrite set after the rewrite classes exist.
 
-    A failing check is not a conformance finding. Callers omit ``idempotent``
-    rather than recording False.
+    The classes are defined below this function, the way the optimizer factory
+    loads its rewrite classes after the constants.
 
-    :param inner: The method declaration whose body is walked.
-    :type inner: Declaration
-    :return: True when no raise statement is reachable.
-    :rtype: bool
+    :return: Rewrite instances in dispatch order.
+    :rtype: List[Rewrite]
     '''
 
-    # Walk the method body, including nested control-flow and snippet bodies.
-    return not _contains_raise(inner.code)
-
-# ** function: contains_raise
-def _contains_raise(stmts: Optional[List[Statement]]) -> bool:
-    '''
-    Report whether a statement list can reach a raise.
-
-    :param stmts: The statements to walk, or None.
-    :type stmts: Optional[List[Statement]]
-    :return: True when a raise is reachable.
-    :rtype: bool
-    '''
-
-    # A missing list has no raise to find.
-    for current in stmts or []:
-        if getattr(current, 'is_raise', False):
-            return True
-
-        # Descend snippet bodies and each control-flow body.
-        for name in ('body', 'else_body', 'finally_body'):
-            if _contains_raise(getattr(current, name, None)):
-                return True
-
-    # No raise was reachable.
-    return False
+    # Dispatch order is the published set, not class-definition order.
+    return [
+        ImportsGroupRewrite(
+            id='generator.imports_group',
+            applies_to='imports',
+        ),
+        FunctionsGroupRewrite(
+            id='generator.functions_group',
+            applies_to='functions',
+        ),
+        BlueprintsGroupRewrite(
+            id='generator.blueprints_group',
+            applies_to='blueprints',
+        ),
+        ConstantsGroupRewrite(
+            id='generator.constants_group',
+            applies_to='constants',
+        ),
+        ClassesGroupRewrite(
+            id='generator.classes_group',
+            applies_to='classes',
+        ),
+        ModelsGroupRewrite(
+            id='generator.models_group',
+            applies_to='models',
+        ),
+        MappersGroupRewrite(
+            id='generator.mappers_group',
+            applies_to='mappers',
+        ),
+        InterfacesGroupRewrite(
+            id='generator.interfaces_group',
+            applies_to='interfaces',
+        ),
+        UtilsGroupRewrite(
+            id='generator.utils_group',
+            applies_to='utils',
+        ),
+        ContextsGroupRewrite(
+            id='generator.contexts_group',
+            applies_to='contexts',
+        ),
+        ReposGroupRewrite(
+            id='generator.repos_group',
+            applies_to='repos',
+        ),
+        EventGroupRewrite(
+            id='generator.events_group',
+            applies_to='events',
+        ),
+        AttributeMemberRewrite(
+            id='generator.attribute_member',
+            applies_to='attribute',
+        ),
+        InitMemberRewrite(
+            id='generator.init_member',
+            applies_to='init',
+        ),
+        ExecuteMemberRewrite(
+            id='generator.execute_member',
+            applies_to='execute',
+        ),
+        MethodMemberRewrite(
+            id='generator.method_member',
+            applies_to='method',
+        ),
+    ]
 
 # *** classes
 
@@ -542,7 +598,7 @@ class AttributeMemberRewrite(Rewrite):
     '''
 
     # * method: apply
-    def apply(self, candidate: Declaration, context: RewriteContext) -> None:
+    def apply(self, candidate: Declaration, context: RewriteContext):
         '''
         Add the attribute to the event being rewritten.
 
@@ -556,7 +612,6 @@ class AttributeMemberRewrite(Rewrite):
 
         # The host mutates the accumulator. There is no contribution to merge.
         context.host.build_attribute(candidate, context.event)
-        return None
 
 # ** class: init_member_rewrite
 class InitMemberRewrite(Rewrite):
@@ -567,7 +622,7 @@ class InitMemberRewrite(Rewrite):
     '''
 
     # * method: apply
-    def apply(self, candidate: Declaration, context: RewriteContext) -> None:
+    def apply(self, candidate: Declaration, context: RewriteContext):
         '''
         Add injections to the event being rewritten.
 
@@ -581,7 +636,6 @@ class InitMemberRewrite(Rewrite):
 
         # The host mutates the accumulator. There is no contribution to merge.
         context.host.build_injections(candidate, context.event)
-        return None
 
 # ** class: execute_member_rewrite
 class ExecuteMemberRewrite(Rewrite):
@@ -592,7 +646,7 @@ class ExecuteMemberRewrite(Rewrite):
     '''
 
     # * method: apply
-    def apply(self, candidate: Declaration, context: RewriteContext) -> None:
+    def apply(self, candidate: Declaration, context: RewriteContext):
         '''
         Set the execute payload on the event being rewritten.
 
@@ -606,7 +660,6 @@ class ExecuteMemberRewrite(Rewrite):
 
         # The host mutates the accumulator and does not copy a desc key.
         context.host.build_execute(candidate, context.event)
-        return None
 
 # ** class: method_member_rewrite
 class MethodMemberRewrite(Rewrite):
@@ -617,7 +670,7 @@ class MethodMemberRewrite(Rewrite):
     '''
 
     # * method: apply
-    def apply(self, candidate: Declaration, context: RewriteContext) -> None:
+    def apply(self, candidate: Declaration, context: RewriteContext):
         '''
         Add a method payload when the inner declaration builds one.
 
@@ -632,7 +685,7 @@ class MethodMemberRewrite(Rewrite):
         # An empty callable is absence, not a method entry.
         method = context.host.build_method(candidate)
         if not method:
-            return None
+            return
 
         # Copy a member qualifier when the header declared one.
         if getattr(candidate, 'artifact_qualifier', None):
@@ -642,94 +695,11 @@ class MethodMemberRewrite(Rewrite):
         inner = candidate.inner_decl
         if inner is not None and inner.name:
             context.event.add_method(inner.name, method)
-        return None
-
-# *** constants
-
-# ** constant: known_group_hooks
-KNOWN_GROUP_HOOKS: FrozenSet[str] = frozenset({
-    'imports',
-    'functions',
-    'constants',
-    'classes',
-    'models',
-    'mappers',
-    'interfaces',
-    'utils',
-    'contexts',
-    'blueprints',
-    'repos',
-})
-
-# ** constant: generator_rewrite_set
-GENERATOR_REWRITE_SET: List[Rewrite] = [
-    ImportsGroupRewrite(
-        id='generator.imports_group',
-        applies_to='imports',
-    ),
-    FunctionsGroupRewrite(
-        id='generator.functions_group',
-        applies_to='functions',
-    ),
-    BlueprintsGroupRewrite(
-        id='generator.blueprints_group',
-        applies_to='blueprints',
-    ),
-    ConstantsGroupRewrite(
-        id='generator.constants_group',
-        applies_to='constants',
-    ),
-    ClassesGroupRewrite(
-        id='generator.classes_group',
-        applies_to='classes',
-    ),
-    ModelsGroupRewrite(
-        id='generator.models_group',
-        applies_to='models',
-    ),
-    MappersGroupRewrite(
-        id='generator.mappers_group',
-        applies_to='mappers',
-    ),
-    InterfacesGroupRewrite(
-        id='generator.interfaces_group',
-        applies_to='interfaces',
-    ),
-    UtilsGroupRewrite(
-        id='generator.utils_group',
-        applies_to='utils',
-    ),
-    ContextsGroupRewrite(
-        id='generator.contexts_group',
-        applies_to='contexts',
-    ),
-    ReposGroupRewrite(
-        id='generator.repos_group',
-        applies_to='repos',
-    ),
-    EventGroupRewrite(
-        id='generator.events_group',
-        applies_to='events',
-    ),
-    AttributeMemberRewrite(
-        id='generator.attribute_member',
-        applies_to='attribute',
-    ),
-    InitMemberRewrite(
-        id='generator.init_member',
-        applies_to='init',
-    ),
-    ExecuteMemberRewrite(
-        id='generator.execute_member',
-        applies_to='execute',
-    ),
-    MethodMemberRewrite(
-        id='generator.method_member',
-        applies_to='method',
-    ),
-]
 
 # *** utils
+
+# ** constant: generator_rewrite_set
+GENERATOR_REWRITE_SET: List[Rewrite] = build_generator_rewrite_set()
 
 # ** util: tiferet_generator
 class TiferetGenerator(CodegenService):
@@ -746,7 +716,7 @@ class TiferetGenerator(CodegenService):
     _sibling_import_names: FrozenSet[str]
 
     # * init
-    def __init__(self, rewrites: Optional[List[Rewrite]] = None) -> None:
+    def __init__(self, rewrites: Optional[List[Rewrite]] = None):
         '''
         Store the rewrite set used to dispatch groups and members.
 
@@ -1183,7 +1153,7 @@ class TiferetGenerator(CodegenService):
 
     # * method: dispatch_member
     def dispatch_member(self, member_decl: Declaration,
-            event: EventAccumulator) -> None:
+            event: EventAccumulator):
         '''
         Invoke the member rewrite for one class member.
 
@@ -1214,7 +1184,7 @@ class TiferetGenerator(CodegenService):
 
     # * method: build_attribute
     def build_attribute(self, member_decl: Declaration,
-            event: EventAccumulator) -> None:
+            event: EventAccumulator):
         '''
         Add one attribute from the member's inner declaration.
 
@@ -1241,7 +1211,7 @@ class TiferetGenerator(CodegenService):
 
     # * method: build_injections
     def build_injections(self, member_decl: Declaration,
-            event: EventAccumulator) -> None:
+            event: EventAccumulator):
         '''
         Add constructor injections for every parameter except ``self``.
 
@@ -1277,7 +1247,7 @@ class TiferetGenerator(CodegenService):
 
     # * method: build_execute
     def build_execute(self, member_decl: Declaration,
-            event: EventAccumulator) -> None:
+            event: EventAccumulator):
         '''
         Assemble an execute payload without a description key.
 
@@ -1599,9 +1569,9 @@ class TiferetGenerator(CodegenService):
         # Return the matching parameters, empty when none are siblings.
         return collaborators
 
-    # * method: merge_imports
+    # * method: _merge_imports
     def _merge_imports(self, impt: Dict[str, List[Dict[str, Any]]],
-            extra: Optional[Dict[str, List[Dict[str, Any]]]]) -> None:
+            extra: Optional[Dict[str, List[Dict[str, Any]]]]):
         '''
         Extend import categories with another category map.
 
@@ -1617,9 +1587,9 @@ class TiferetGenerator(CodegenService):
         for category, entries in (extra or {}).items():
             impt.setdefault(category, []).extend(entries)
 
-    # * method: collect_sibling_names
+    # * method: _collect_sibling_names
     def _collect_sibling_names(self, stmts: Optional[List[Statement]],
-            names: List[str]) -> None:
+            names: List[str]):
         '''
         Append sibling import symbols from import-from statements.
 
@@ -1642,7 +1612,7 @@ class TiferetGenerator(CodegenService):
             if getattr(stmt, 'is_artifact', False):
                 self._collect_sibling_names(stmt.body, names)
 
-    # * method: is_section
+    # * method: _is_section
     def _is_section(self, section: Statement, keyword: str) -> bool:
         '''
         Report whether a statement is an artifact section of a given keyword.
@@ -1660,7 +1630,7 @@ class TiferetGenerator(CodegenService):
             return False
         return getattr(section.decl, 'section_keyword', None) == keyword
 
-    # * method: constant_assignment
+    # * method: _constant_assignment
     def _constant_assignment(self, stmt: Statement) -> Optional[tuple]:
         '''
         Read an assignment target name and its encoded initializer.
@@ -1691,7 +1661,7 @@ class TiferetGenerator(CodegenService):
         # Anything else is not a constant assignment.
         return None
 
-    # * method: function_from_section
+    # * method: _function_from_section
     def _function_from_section(self, section: Statement) -> tuple:
         '''
         Find a section's inner function and the decorators that precede it.
@@ -1716,7 +1686,7 @@ class TiferetGenerator(CodegenService):
         # A section without a function declaration contributes neither.
         return None, decorators
 
-    # * method: class_payloads
+    # * method: _class_payloads
     def _class_payloads(self, body: List[Statement], annotate) -> Dict[str, Dict[str, Any]]:
         '''
         Build class payloads and let the caller patch extra keys.
@@ -1746,9 +1716,9 @@ class TiferetGenerator(CodegenService):
         # Return the class map.
         return entries
 
-    # * method: keep_class_payload
+    # * method: _keep_class_payload
     def _keep_class_payload(self, class_decl: Declaration,
-            payload: Dict[str, Any]) -> None:
+            payload: Dict[str, Any]):
         '''
         Leave a shared class payload unchanged.
 
@@ -1760,11 +1730,8 @@ class TiferetGenerator(CodegenService):
         :rtype: None
         '''
 
-        # Models add no extra keys.
-        del class_decl, payload
-
-    # * method: set_base
-    def _set_base(self, class_decl: Declaration, payload: Dict[str, Any]) -> None:
+    # * method: _set_base
+    def _set_base(self, class_decl: Declaration, payload: Dict[str, Any]):
         '''
         Set ``base`` from the first base name when one is present.
 
@@ -1781,9 +1748,9 @@ class TiferetGenerator(CodegenService):
         if base:
             payload['base'] = base
 
-    # * method: set_mapper_keys
+    # * method: _set_mapper_keys
     def _set_mapper_keys(self, class_decl: Declaration,
-            payload: Dict[str, Any]) -> None:
+            payload: Dict[str, Any]):
         '''
         Set ``maps`` and mapper ``kind`` from the base chain.
 
@@ -1807,9 +1774,9 @@ class TiferetGenerator(CodegenService):
         elif second == 'TransferObject':
             payload['kind'] = 'transfer_object'
 
-    # * method: set_context_keys
+    # * method: _set_context_keys
     def _set_context_keys(self, class_decl: Declaration,
-            payload: Dict[str, Any]) -> None:
+            payload: Dict[str, Any]):
         '''
         Set ``base`` and sibling collaborators on a context payload.
 
@@ -1827,9 +1794,9 @@ class TiferetGenerator(CodegenService):
         if collaborators:
             payload['collaborators'] = collaborators
 
-    # * method: set_repo_keys
+    # * method: _set_repo_keys
     def _set_repo_keys(self, class_decl: Declaration,
-            payload: Dict[str, Any]) -> None:
+            payload: Dict[str, Any]):
         '''
         Set ``implements`` and mark an idempotent delete method.
 
@@ -1851,13 +1818,13 @@ class TiferetGenerator(CodegenService):
             inner = member.inner_decl
             if inner is None or inner.name != 'delete':
                 continue
-            if not _is_idempotent_delete(inner):
+            if not inner.is_idempotent_delete():
                 continue
             methods = payload.get('methods') or {}
             if 'delete' in methods:
                 methods['delete']['idempotent'] = True
 
-    # * method: base_name
+    # * method: _base_name
     def _base_name(self, class_decl: Declaration, index: int) -> Optional[str]:
         '''
         Read a base-class name by chain index.
@@ -1882,7 +1849,7 @@ class TiferetGenerator(CodegenService):
             return None
         return current.name
 
-    # * method: injection_spec
+    # * method: _injection_spec
     def _injection_spec(self, param: ParamList,
             descriptions: Dict[str, str]) -> str:
         '''
@@ -1901,7 +1868,7 @@ class TiferetGenerator(CodegenService):
         desc = descriptions.get(param.name, '')
         return f'{param.name}:{get_type_name(param.type)}:{required}::{desc}'
 
-    # * method: param_spec
+    # * method: _param_spec
     def _param_spec(self, param: ParamList, descriptions: Dict[str, str]) -> str:
         '''
         Format one parameter spec, including an encoded default.
@@ -1920,7 +1887,7 @@ class TiferetGenerator(CodegenService):
         desc = descriptions.get(param.name, '')
         return f'{param.name}:{get_type_name(param.type)}:{required}:{default}:{desc}'
 
-    # * method: comment_text
+    # * method: _comment_text
     def _comment_text(self, comment: Statement) -> str:
         '''
         Strip a comment marker and trim the remaining text.
