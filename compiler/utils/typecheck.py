@@ -14,6 +14,7 @@ from .core import (
     AttributeMemberSpecification,
     BinaryOpTypeSpecification,
     ConformanceContext,
+    ConstantSectionNameSpecification,
     ContextManagerPairingSpecification,
     DIAbstractMethodSpecification,
     DomainAttributeSpecification,
@@ -31,6 +32,7 @@ from .core import (
     SectionClassNameSpecification,
     Specification,
     StatementWalker,
+    declares_bound_domain_type,
 )
 
 # *** constants
@@ -299,6 +301,126 @@ REPOS_RULE_SET: List[Specification] = [
     ),
     ReposCrudMethodSpecification(
         id='repos.crud_method',
+        applies_to='artifact_header',
+    ),
+]
+
+# ** constant: asset_rule_set
+ASSET_RULE_SET: List[Specification] = [
+    PermittedGroupSpecification(
+        id='asset.permitted_group',
+        applies_to='artifact_header',
+        permitted_groups=frozenset({
+            'imports',
+            'constants',
+            'functions',
+            'classes',
+            'exports',
+        }),
+        error_code='DISALLOWED_ASSET_GROUP',
+        module_label='an assets module',
+    ),
+    AppImportSpecification(
+        id='asset.import_sibling',
+        applies_to='artifact_header',
+        error_code='INVALID_ASSET_APP_IMPORT',
+        message=(
+            "Assets 'app' import group may only import same-package sibling "
+            "modules (e.g. 'from .core import ...'); found '{module_path}'."
+        ),
+        allowed_components=frozenset(),
+        allow_siblings=True,
+        allow_framework_root_alias=False,
+    ),
+    GroupSectionAgreementSpecification(
+        id='asset.group_section_agreement',
+        applies_to='artifact_header',
+    ),
+    ConstantSectionNameSpecification(
+        id='asset.constant_section_name',
+        applies_to='artifact_header',
+    ),
+]
+
+# ** constant: contexts_rule_set
+CONTEXTS_RULE_SET: List[Specification] = [
+    PermittedGroupSpecification(
+        id='contexts.permitted_group',
+        applies_to='artifact_header',
+        permitted_groups=frozenset({
+            'imports',
+            'contexts',
+            'exports',
+            'classes',
+            'constants',
+            'functions',
+        }),
+        error_code='DISALLOWED_CONTEXTS_GROUP',
+        module_label='a contexts module',
+    ),
+    AppImportSpecification(
+        id='contexts.app_import',
+        applies_to='artifact_header',
+        error_code='INVALID_CONTEXTS_APP_IMPORT',
+        message=(
+            "Contexts 'app' import group may only import same-package sibling "
+            "modules or the assets/domain/events component types; found '{module_path}'."
+        ),
+        allowed_components=frozenset({
+            'assets',
+            'domain',
+            'events',
+        }),
+        allow_siblings=True,
+        allow_framework_root_alias=True,
+    ),
+    RequiredBaseSpecification(
+        id='contexts.base_class',
+        applies_to='artifact_header',
+        section_keyword='context',
+        error_code='CONTEXT_MISSING_BASE_CONTEXT',
+        message=(
+            "Context class '{class_name}' declares 'domain_type' and must extend 'BaseContext'"
+        ),
+        required_base='BaseContext',
+        predicate=declares_bound_domain_type,
+    ),
+]
+
+# ** constant: blueprints_rule_set
+BLUEPRINTS_RULE_SET: List[Specification] = [
+    PermittedGroupSpecification(
+        id='blueprints.permitted_group',
+        applies_to='artifact_header',
+        permitted_groups=frozenset({
+            'imports',
+            'constants',
+            'functions',
+            'blueprints',
+            'exports',
+        }),
+        error_code='DISALLOWED_BLUEPRINTS_GROUP',
+        module_label='a blueprints module',
+    ),
+    AppImportSpecification(
+        id='blueprints.app_import',
+        applies_to='artifact_header',
+        error_code='INVALID_BLUEPRINTS_APP_IMPORT',
+        message=(
+            "Blueprints 'app' import group may only import same-package sibling "
+            "modules or the assets/contexts/di/events component types; found '{module_path}'."
+        ),
+        allowed_components=frozenset({
+            'assets',
+            'contexts',
+            'di',
+            'events',
+        }),
+        allow_siblings=True,
+        allow_framework_root_alias=True,
+    ),
+    GroupSectionAgreementSpecification(
+        id='blueprints.group_section_agreement',
         applies_to='artifact_header',
     ),
 ]

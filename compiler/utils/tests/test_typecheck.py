@@ -796,15 +796,8 @@ def test_no_type_checker_class() -> None:
     Test that compiler.utils.typecheck does not define TypeChecker.
     '''
 
-    # The walker is ConformanceChecker. Accessor rule sets are a later story.
+    # The walker is ConformanceChecker. Dialect variation is a rule-set constant.
     assert not hasattr(typecheck, 'TypeChecker')
-    forbidden = (
-        'ASSET_RULE_SET',
-        'CONTEXTS_RULE_SET',
-        'BLUEPRINTS_RULE_SET',
-    )
-    for name in forbidden:
-        assert not hasattr(typecheck, name)
 
     # The common rule set is exactly the eight rows, in order.
     assert [

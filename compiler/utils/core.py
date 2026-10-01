@@ -175,6 +175,43 @@ def extract_member_name_from_metadata(decl: Declaration) -> Optional[str]:
     del decl
     return None
 
+# ** function: declares_bound_domain_type
+def declares_bound_domain_type(candidate: Any, context: Any,
+                               class_decl: Declaration) -> bool:
+    '''
+    Report whether a class declares a bound domain_type attribute.
+
+    A bare None initializer is a type-hint placeholder, not a binding.
+    The section header and visit context are accepted so this can be a
+    required-base predicate, and they are not consulted.
+
+    :param candidate: The section header. Unused.
+    :type candidate: Any
+    :param context: The conformance visit context. Unused.
+    :type context: Any
+    :param class_decl: The class declaration to inspect.
+    :type class_decl: Declaration
+    :return: True when a domain_type attribute is initialized to a non-None value.
+    :rtype: bool
+    '''
+
+    # A bound domain_type is an attribute whose initializer is not bare None.
+    for member in class_decl.members:
+        if getattr(member, 'artifact_role', None) != 'attribute':
+            continue
+        inner_decl = member.inner_decl
+        if inner_decl is None or inner_decl.name != 'domain_type':
+            continue
+        value = getattr(inner_decl, 'value', None)
+        if value is None or getattr(value, 'kind', None) == ExprKind.NONE_VAL:
+            continue
+
+        # Any other initializer binds the domain type.
+        return True
+
+    # No bound domain_type attribute was found.
+    return False
+
 # ** function: binary_op_findings
 def _binary_op_findings(expr: Optional[Any], context: 'ConformanceContext') -> List[Dict]:
     '''
