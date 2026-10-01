@@ -9,13 +9,20 @@ from typing import Any, Dict, List, Optional
 from ..mappers import Declaration, Statement
 from ..mappers.typecheck import TypeErrorCollection
 from .core import (
+    AppImportSpecification,
     AssignmentTypeSpecification,
     AttributeMemberSpecification,
     BinaryOpTypeSpecification,
     ConformanceContext,
+    DIAbstractMethodSpecification,
+    DomainAttributeSpecification,
+    EventSectionSpecification,
     FunctionSectionNameSpecification,
+    GroupSectionAgreementSpecification,
     ImportGroupSpecification,
     MethodMemberSpecification,
+    PermittedGroupSpecification,
+    RequiredBaseSpecification,
     ReturnBinaryOpTypeSpecification,
     SectionClassNameSpecification,
     Specification,
@@ -57,6 +64,95 @@ COMMON_RULE_SET: List[Specification] = [
     ReturnBinaryOpTypeSpecification(
         id='common.binary_op_return',
         applies_to='return',
+    ),
+]
+
+# ** constant: event_rule_set
+EVENT_RULE_SET: List[Specification] = [
+    EventSectionSpecification(
+        id='event.section',
+        applies_to='artifact_header',
+    ),
+]
+
+# ** constant: domain_rule_set
+DOMAIN_RULE_SET: List[Specification] = [
+    PermittedGroupSpecification(
+        id='domain.permitted_group',
+        applies_to='artifact_header',
+        permitted_groups=frozenset({
+            'imports',
+            'constants',
+            'functions',
+            'classes',
+            'models',
+            'exports',
+        }),
+        error_code='DISALLOWED_DOMAIN_GROUP',
+        module_label='a domain module',
+    ),
+    AppImportSpecification(
+        id='domain.app_import',
+        applies_to='artifact_header',
+        error_code='INVALID_DOMAIN_APP_IMPORT',
+        message=(
+            "Domain 'app' import group may only import same-package sibling "
+            "modules or the assets component type; found '{module_path}'."
+        ),
+        allowed_components=frozenset({'assets'}),
+    ),
+    GroupSectionAgreementSpecification(
+        id='domain.group_section_agreement',
+        applies_to='artifact_header',
+    ),
+    RequiredBaseSpecification(
+        id='domain.model_base_class',
+        applies_to='artifact_header',
+        section_keyword='model',
+        error_code='MODEL_MISSING_DOMAIN_OBJECT_BASE',
+        message=(
+            "Model '{header_name}' class '{class_name}' declares no base class; "
+            "it must extend DomainObject"
+        ),
+        name_key='model_name',
+    ),
+    DomainAttributeSpecification(
+        id='domain.attribute',
+        applies_to='member',
+    ),
+]
+
+# ** constant: di_rule_set
+DI_RULE_SET: List[Specification] = [
+    PermittedGroupSpecification(
+        id='di.permitted_group',
+        applies_to='artifact_header',
+        permitted_groups=frozenset({
+            'imports',
+            'constants',
+            'functions',
+            'classes',
+            'exports',
+        }),
+        error_code='DISALLOWED_DI_GROUP',
+        module_label='a di module',
+    ),
+    AppImportSpecification(
+        id='di.app_import',
+        applies_to='artifact_header',
+        error_code='INVALID_DI_APP_IMPORT',
+        message=(
+            "DI 'app' import group may only import same-package sibling "
+            "modules or the domain/interfaces component types; found '{module_path}'."
+        ),
+        allowed_components=frozenset({
+            'domain',
+            'interfaces',
+        }),
+    ),
+    DIAbstractMethodSpecification(
+        id='di.abstract_method',
+        applies_to='artifact_header',
     ),
 ]
 
