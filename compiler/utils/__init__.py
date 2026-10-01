@@ -3,6 +3,7 @@
 # *** exports
 
 # ** app
+from .codegen import TiferetGenerator
 from .docstring import DocstringParser
 from .lexer import TiferetLexer
 from .optimizer import YamlAnchorOptimizer
