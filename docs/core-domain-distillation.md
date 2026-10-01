@@ -10,14 +10,15 @@ works: the vocabulary, the behaviors, the rules those behaviors enforce, and
 the way the pieces relate. Read it before changing the pipeline, and before
 judging whether a change belongs in this package or in a neighbor.
 
-This repository does not implement the domain yet. `tiferet_elsl/` is the
-intended import package; the distribution name is `tiferet-elsl`. No path
-below is a file here.
+`tiferet_elsl/` is the intended import package; the distribution name is
+`tiferet-elsl`. The trunk reconstruction lives under `compiler/`. A citation
+without a prefix is a file in this repository. `proto:` is the prototype of
+this pipeline at commit `cf07ed5`. `tiferet:` means `greatstrength/tiferet`
+`main` at `dc64214`, for the import law.
 
-Behavioral claims are grounded in a prototype of this pipeline at commit
-`cf07ed5`. Citations use `proto:` for that tree. None of those paths exist
-in this repository. `tiferet:` means `greatstrength/tiferet` `main` at
-`dc64214`, for the import law.
+The actor dialects `events`, `domain`, and `di` now have rule lists here.
+The other seven dialects, the gated conformance events, and the declared
+pipelines are still prior art.
 
 Where a description of that prototype and the code disagree, the code wins.
 Sections 7 and 8 record the disagreements.
@@ -156,8 +157,9 @@ it without this package choosing a target language.
 ## 5. The six behaviors
 
 Each behavior is a bounded step. In the prior art each is a domain event,
-composed in `proto:compiler/assets/feature.yml`. None of these classes exist
-in this repository.
+composed in `proto:compiler/assets/feature.yml`. Where a behavior has been
+reconstructed, the section cites the file in this repository. The declared
+pipelines are still prior art.
 
 ### 5.1 Lexical scanning
 
@@ -229,29 +231,37 @@ the next behavior, and it requires the component type.
 Component type is an input. On the semantic-bearing commands it arrives as
 `-c` / `--component`, required, with the ten names as the legal choices
 (`proto:compiler/assets/cli.yml (1-2)`, `(66-82)`). The walker is one
-`ConformanceChecker` (`proto:compiler/utils/typecheck.py:292`), a
-`StatementWalker` (`proto:compiler/utils/core.py:886`). The checker file
-does not branch on component type. The rule list it is given does.
+`ConformanceChecker` (`compiler/utils/typecheck.py:162`), a
+`StatementWalker`. The checker file does not branch on component type. The
+rule list it is given does.
 
 Findings are collected rather than failing on the first one
 (`proto:compiler/domain/typecheck.py:14`).
 
 The common family runs for every component type
-(`proto:compiler/utils/typecheck.py (41-50)`): import groups limited to
+(`compiler/utils/typecheck.py (35-68)`): import groups limited to
 `core`, `infra`, and `app`; a named section must contain the unit it
 advertises; an attribute member must be a variable declaration; a method
 member must be a function. Assignments and arithmetic are checked shallowly
 against declared and inferred types. That shallow check serves conformance.
 It is not a general type system.
 
-The dialect family is selected by component type. In the prior art that
-selection is not one event with a parameter. It is one common event plus ten dialect events
-(`proto:compiler/events/typecheck.py (95-455)`), each holding a rule list,
-gated by `$r.component == '...'`
-(`proto:compiler/assets/feature.yml (44-93)`). The data is constructor
-arguments, not copied walker logic. Unique rules stay their own classes:
-event sections, domain attributes, repository methods, utility
-context-manager pairing, and abstract-method shape.
+The reconstructed checker does not branch on component type. Three actor
+rule lists are constants on that file: `EVENT_RULE_SET`
+(`compiler/utils/typecheck.py (71-76)`), `DOMAIN_RULE_SET`
+(`compiler/utils/typecheck.py (79-123)`), and `DI_RULE_SET`
+(`compiler/utils/typecheck.py (126-157)`). A caller passes one list.
+`PermittedGroupSpecification`, `AppImportSpecification`, and
+`RequiredBaseSpecification` (`compiler/utils/core.py (1963-2358)`) supply
+constructor data. Unique classes already on the walker — event sections,
+domain attributes, group-section agreement, and abstract-method shape — are
+instantiated by those lists. `EVENT_RULE_SET` does not judge `app` imports.
+
+Selecting a list by component type is not reconstructed. In the prior art
+that selection is one common event plus ten dialect events
+(`proto:compiler/events/typecheck.py (95-455)`), gated by
+`$r.component == '...'` (`proto:compiler/assets/feature.yml (44-93)`).
+The data there is also constructor arguments, not copied walker logic.
 
 **Variable on both axes.** The walker is agnostic. Which rule list runs, and
 what data that list was constructed with, is the dialect. Section 7 records
@@ -354,10 +364,10 @@ Three facts make that checkable here and not by a generic linter:
    in one dialect and a violation in another.
 
 The mechanism is `AppImportSpecification`
-(`proto:compiler/utils/core.py:1754`). A dialect passes the component types
-it allows, whether same-package siblings are allowed (the default is yes),
-and whether the framework-root `a` alias is allowed. The walker does not
-know the sets.
+(`compiler/utils/core.py:2052`). A dialect passes the component types it
+allows, whether same-package siblings are allowed (the default is yes), and
+whether the framework-root `a` alias is allowed. The walker does not know
+the sets.
 
 There are two sources for those sets, and they do not match. Both are cited.
 Neither is silently preferred.
@@ -381,33 +391,38 @@ tiferet tree at `dc64214`. The skill is the law that is actually present.
 - `blueprints` may use `assets`, `contexts`, `di`, and `events` (bootstrap
   only). They reach domain types through contexts, not by importing them.
 
-**The sets the prior-art checker enforces** are the `allowed_components`
-passed to each dialect's `AppImportSpecification`
-(`proto:compiler/utils/typecheck.py (66-277)`), plus the events list, which
-is not there:
+**The sets reconstructed here** are the actor slice
+(`compiler/utils/typecheck.py (71-157)`):
+
+- `events` — no relationship specification. `EVENT_RULE_SET` contains only
+  the event-section rule (`compiler/utils/typecheck.py (71-76)`).
+- `domain` — siblings, or `assets` (`compiler/utils/typecheck.py (94-103)`).
+- `di` — siblings, or `domain` and `interfaces`
+  (`compiler/utils/typecheck.py (140-152)`).
+
+**The sets the prior-art checker enforces** for the dialects not yet
+reconstructed remain `proto:compiler/utils/typecheck.py (66-277)`:
 
 - `assets` — siblings only (`(66-77)`).
-- `domain` — siblings, or `assets` (`(91-100)`).
 - `mappers` — siblings, or `domain` and `events` (`(122-131)`).
 - `interfaces` — siblings, or `mappers` (`(145-154)`).
-- `di` — siblings, or `domain` and `interfaces` (`(167-176)`).
 - `utils` — siblings, or `interfaces` and `mappers` (`(189-198)`).
 - `contexts` — siblings, or `assets`, `domain`, and `events`, and the
   framework-root alias (`(211-222)`).
 - `blueprints` — siblings, or `assets`, `contexts`, `di`, and `events`, and
   the framework-root alias (`(243-254)`).
 - `repos` — siblings, or `interfaces`, `mappers`, and `utils` (`(267-277)`).
-- `events` — no relationship specification. `EVENT_RULE_SET` contains only
-  the event-section rule (`(52-55)`).
 
 The disagreements that matter:
 
-- **Events are unchecked.** That dialect has no relationship rule. The
-  skill's events row is not enforced.
-- **Domain.** The skill forbids every framework import. The checker allows
-  `assets`.
-- **Mappers.** The skill allows `domain` and forbids `events`. The checker
-  allows both.
+- **Events are unchecked.** The reconstructed list has no relationship rule.
+  The skill's events row is not enforced.
+- **Domain.** The skill forbids every framework import. The reconstructed
+  checker allows `assets`.
+- **Di.** The reconstructed list matches the skill: `domain` and
+  `interfaces`, and no assets.
+- **Mappers.** The skill allows `domain` and forbids `events`. The prior-art
+  checker allows both. That dialect is not reconstructed here.
 - **Interfaces.** The skill's exception for importing `domain` is not a
   specification. The checker allows `mappers` and siblings, and does not
   state that exception.
@@ -422,8 +437,9 @@ names one declared source as a candidate. It does not perform that work.
 
 ## 8. The agnostic core and the variable edge
 
-There is no local entanglement inventory: `tiferet_elsl/` does not exist.
-The items below are prior-art debts. Do not copy them as the design.
+`tiferet_elsl/` does not exist. The local inventory is the reconstructed
+actor slice. The remaining items are prior-art debts. Do not copy them as
+the design.
 
 **Agnostic — build once, not once per component type:**
 
@@ -458,13 +474,15 @@ The items below are prior-art debts. Do not copy them as the design.
   envelope, not ElohaSL.
 - When both envelopes are present, `collect_lists` walks `evt_grp` and
   stops (`proto:compiler/utils/optimizer.py (52-78)`, `(233-250)`).
-- Conformance is eleven event classes and ten configuration gates
-  (`proto:compiler/events/typecheck.py (95-455)`,
-  `proto:compiler/assets/feature.yml (44-93)`), not one step given a rule
-  list.
+- Conformance selection is still eleven event classes and ten configuration
+  gates (`proto:compiler/events/typecheck.py (95-455)`,
+  `proto:compiler/assets/feature.yml (44-93)`). The walker and three actor
+  rule lists are reconstructed (`compiler/utils/typecheck.py (71-157)`).
+  The step that chooses a list by component type is not.
 - The events dialect has no relationship specification
-  (`proto:compiler/utils/typecheck.py (52-55)`). Domain allows `assets`;
-  mappers allow `events`. Section 7 has the lines.
+  (`compiler/utils/typecheck.py (71-76)`). The reconstructed domain list
+  allows `assets`. The prior-art mapper list allows `events`. Section 7
+  has the lines.
 
 ## 9. Boundaries
 
@@ -495,8 +513,9 @@ No identifier is minted.
 1. **Seed `tiferet_elsl` with the agnostic pipeline.** Read, model,
    verify, distill, as one component-agnostic command surface. Do not copy
    the events default on `generate`.
-2. **One conformance step, ten rule lists.** One step, given the rule list
-   for the supplied type, instead of ten gated events.
+2. **Finish the conformance step.** Three actor rule lists now exist.
+   The remaining seven lists, and one step that selects a list by component
+   type, are still candidates. Do not add a checker subclass per dialect.
 3. **One declared relationship rulebook.** Documentation and the checker
    read the same sets. Reconcile the skill and the prior-art constructor
    arguments, and add the missing events rule. Until that exists, do not
