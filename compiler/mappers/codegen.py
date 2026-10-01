@@ -6,7 +6,8 @@
 from typing import Any, Dict, List, Optional
 
 # ** infra
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import Field, PrivateAttr
+from tiferet.mappers import Aggregate
 
 # ** app
 from ..domain.codegen import (
@@ -18,7 +19,7 @@ from ..domain.codegen import (
 # *** mappers
 
 # ** mapper: import_entry_collector
-class ImportEntryCollector(BaseModel):
+class ImportEntryCollector(Aggregate):
     '''
     Collapses same-module imports into one ordered entry per module path.
 
@@ -85,7 +86,7 @@ class ImportEntryCollector(BaseModel):
 
 
 # ** mapper: snippet_accumulator
-class SnippetAccumulator(SnippetData):
+class SnippetAccumulator(SnippetData, Aggregate):
     '''
     Accumulates a snippet body and serializes it under codegen keys.
 
@@ -145,7 +146,7 @@ class SnippetAccumulator(SnippetData):
 
 
 # ** mapper: event_accumulator
-class EventAccumulator(EventData):
+class EventAccumulator(EventData, Aggregate):
     '''
     Accumulates a class payload and serializes only the filled sections.
 
