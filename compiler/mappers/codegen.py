@@ -84,7 +84,6 @@ class ImportEntryCollector(Aggregate):
             for entry in self.entries
         ]
 
-
 # ** mapper: snippet_accumulator
 class SnippetAccumulator(SnippetData, Aggregate):
     '''
@@ -151,7 +150,6 @@ class SnippetAccumulator(SnippetData, Aggregate):
 
         # An empty snippet is absence, not an empty dict.
         return data or None
-
 
 # ** mapper: event_accumulator
 class EventAccumulator(EventData, Aggregate):
