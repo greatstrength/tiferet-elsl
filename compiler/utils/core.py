@@ -2027,7 +2027,6 @@ class PermittedGroupSpecification(Specification):
         '''
 
         # Only tier-1 groups are judged.
-        del context
         header_decl = candidate
         if getattr(header_decl, 'artifact_type', None) != '***':
             return []
