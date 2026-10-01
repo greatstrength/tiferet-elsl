@@ -7,8 +7,26 @@ import re
 from pathlib import Path
 
 # ** infra
+import pytest
 import yaml
+from tiferet.interfaces.core import ServiceError
+from tiferet_ly.repos.grammar import GrammarConfigRepository
+from tiferet_ly.repos.production import ProductionConfigRepository
+from tiferet_ly.repos.token import TokenConfigRepository
 from tiferet_ly.utils.translation import RuleTranslator
+
+# ** app
+from ...domain.ast import ExprKind, StatementKind, TypeKind
+from ..lexer import TiferetLexer
+from ..parser import TiferetParser
+from .parser_test_helpers import (
+    get_class_decl,
+    get_func_decl,
+    get_function_decl,
+    get_group,
+    get_member,
+    get_section,
+)
 
 # *** constants
 
@@ -1715,3 +1733,1017 @@ def test_parser_modules_absent() -> None:
     # Neither the assets parser nor the utils parser module exists.
     assert not (_ASSETS_DIR / 'parser.py').exists()
     assert not (_ASSETS_DIR.parent / 'utils' / 'python_parser.py').exists()
+
+# *** classes
+
+# ** class: parser_harness
+class ParserHarness:
+    '''
+    Load the declared catalogues and delegate parsing to TiferetParser.
+    '''
+
+    # * init
+    def __init__(self) -> None:
+        '''
+        Load the declared token, grammar, and production catalogues.
+        '''
+
+        # Catalogues stay on the harness. The adapter does not read them itself.
+        self.tokens = TokenConfigRepository(
+            token_config='compiler/assets/tokens.yml',
+        ).list()
+        self.grammars = GrammarConfigRepository(
+            grammar_config='compiler/assets/grammars.yml',
+        ).list()
+        self.productions = ProductionConfigRepository(
+            production_config='compiler/assets/productions.yml',
+        ).list()
+        self._parser = TiferetParser()
+
+    # * method: parse
+    def parse(self, module_name, tokens, source_text=''):
+        '''
+        Parse a recognized token stream against the declared catalogues.
+
+        :param module_name: Module being parsed.
+        :type module_name: str
+        :param tokens: Already-recognized token stream.
+        :type tokens: list
+        :param source_text: Original source text used for columns.
+        :type source_text: str
+        :return: The root module AST.
+        :rtype: Any
+        '''
+
+        # Delegate. Do not re-lex inside the adapter.
+        return self._parser.parse(
+            module_name,
+            tokens,
+            self.grammars,
+            self.tokens,
+            self.productions,
+            source_text=source_text,
+        )
+
+# *** fixtures
+
+# ** fixture: parser
+@pytest.fixture
+def parser():
+    '''
+    Provide a fresh parser harness.
+
+    :return: A harness loaded from the declared catalogues.
+    :rtype: ParserHarness
+    '''
+
+    # Each test gets its own adapter instance.
+    return ParserHarness()
+
+# *** functions
+
+# ** function: parse_source
+def _parse(parser, source: str, module_name: str = 'sample'):
+    '''
+    Tokenize source with the declared lexer and parse it.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    :param source: The source text.
+    :type source: str
+    :param module_name: Module being parsed.
+    :type module_name: str
+    :return: The root module AST.
+    :rtype: Any
+    '''
+
+    # Layout injection stays in the lexer. The parser receives tokens only.
+    tokens = TiferetLexer().tokenize(source, parser.tokens, parser.grammars)
+    return parser.parse(module_name, tokens, source_text=source)
+
+# ** function: event_source
+def _event(body: str, doc: str = None) -> str:
+    '''
+    Wrap a class body in one events group and section.
+
+    :param body: Class-body source, indented relative to the class.
+    :type body: str
+    :param doc: Optional class docstring without quotes.
+    :type doc: str
+    :return: Module source.
+    :rtype: str
+    '''
+
+    # Keep the group and section adjacent so no extra newline is inserted.
+    lines = [
+        '# *** events',
+        '# ** event: sample',
+        'class Sample(DomainEvent):',
+    ]
+    if doc is not None:
+        lines.append(f'    """{doc}"""')
+    for line in body.splitlines():
+        lines.append(('    ' + line) if line else '')
+    return '\n'.join(lines) + '\n'
+
+# ** function: snippet_statements
+def _statements(func):
+    '''
+    Flatten executable statements out of a function's snippets.
+
+    :param func: The function declaration.
+    :type func: Any
+    :return: Executable statements in source order.
+    :rtype: list
+    '''
+
+    # Comments stay on the snippet. Only the body is executable.
+    statements = []
+    for snippet in func.code:
+        statements.extend(snippet.body)
+    return statements
+
+# *** tests (dialect)
+
+# ** test: test_parse_from_import
+def test_parse_from_import(parser) -> None:
+    '''
+    Test a from-import under imports / core.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The section is explicit. The import is not an implicit core section.
+    source = '# *** imports\n# ** core\nfrom typing import Any\n'
+    module = _parse(parser, source)
+    stmt = get_section(module).body[0]
+
+    # The module name and the imported name stay on separate expressions.
+    assert get_group(module).decl.name == 'imports'
+    assert get_section(module).decl.name == 'core'
+    assert stmt.kind == StatementKind.IMPORT_FROM
+    assert stmt.init_expr.name == 'typing'
+    assert stmt.expr.name == 'Any'
+
+# ** test: test_parse_bare_imports_no_core
+def test_parse_bare_imports_no_core(parser) -> None:
+    '''
+    Test that bare imports yield an implicit core section.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # No section header is written. The grammar inserts core.
+    module = _parse(parser, '# *** imports\nimport typing\n')
+    section = get_group(module).body[0]
+
+    # The implicit section is named core and holds the import.
+    assert section.decl.name == 'core'
+    assert section.decl.artifact_type == '**'
+    assert section.body[0].kind == StatementKind.IMPORT
+    assert section.body[0].expr.name == 'typing'
+
+# ** test: test_parse_attr_typed
+def test_parse_attr_typed(parser) -> None:
+    '''
+    Test a class-typed attribute.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # An unknown annotation name is a class type.
+    module = _parse(parser, _event('# * attribute: service\nservice: ErrorService\n'))
+    attr = get_member(module).code[0].decl
+
+    # The role and the class type both come from the rewrite table.
+    assert get_member(module).artifact_role == 'attribute'
+    assert attr.name == 'service'
+    assert attr.type.kind == TypeKind.CLASS
+    assert attr.type.name == 'ErrorService'
+
+# ** test: test_parse_attr_union_type
+def test_parse_attr_union_type(parser) -> None:
+    '''
+    Test a union attribute annotation.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The right-hand name is the subtype of the left-hand type.
+    module = _parse(parser, _event('# * attribute: value\nvalue: int | str\n'))
+    attr_type = get_member(module).code[0].decl.type
+
+    # int | str keeps int as the outer type and str as its subtype.
+    assert attr_type.kind == TypeKind.INT
+    assert attr_type.subtype.kind == TypeKind.STR
+
+# ** test: test_parse_attr_typed_init
+def test_parse_attr_typed_init(parser) -> None:
+    '''
+    Test a typed attribute with a call initializer.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # Field(...) is a call, not part of the annotation.
+    module = _parse(parser, _event('# * attribute: name\nname: str = Field()\n'))
+    attr = get_member(module).code[0].decl
+
+    # The annotation and the initializer are both stored.
+    assert attr.type.kind == TypeKind.STR
+    assert attr.value.kind == ExprKind.CALL
+    assert attr.value.encode() == 'Call(Field)'
+
+# ** test: test_parse_attr_init_no_type
+def test_parse_attr_init_no_type(parser) -> None:
+    '''
+    Test an untyped initialized attribute.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # No colon means no annotation type.
+    module = _parse(parser, _event('# * attribute: name\nname = "plain"\n'))
+    attr = get_member(module).code[0].decl
+
+    # The initializer is present and the type was not invented.
+    assert attr.name == 'name'
+    assert attr.type is None
+    assert attr.value.encode() == '"plain"'
+
+# ** test: test_parse_attr_init_multiline_call
+def test_parse_attr_init_multiline_call(parser) -> None:
+    '''
+    Test a multiline call initializer.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # Newlines inside the call are layout, not statement breaks.
+    source = _event(
+        '# * attribute: name\n'
+        'name: str = Field(\n'
+        '    default="x",\n'
+        ')\n'
+    )
+    attr = get_member(_parse(parser, source)).code[0].decl
+
+    # The call survives the line break and keeps its keyword argument.
+    assert attr.value.kind == ExprKind.CALL
+    assert 'default=' in attr.value.encode()
+
+# ** test: test_parse_method_self_only
+def test_parse_method_self_only(parser) -> None:
+    '''
+    Test a method whose only parameter is self.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The receiver is required on a method and is not a declared parameter name.
+    source = _event('# * method: execute\ndef execute(self):\n    return result\n')
+    func = get_func_decl(_parse(parser, source))
+
+    # self is present, and it is the only parameter.
+    assert func.name == 'execute'
+    assert [param.name for param in func.type.params] == ['self']
+
+# ** test: test_parse_method_with_typed_param
+def test_parse_method_with_typed_param(parser) -> None:
+    '''
+    Test a typed non-self parameter.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The annotation belongs to the second parameter, not the receiver.
+    source = _event(
+        '# * method: execute\n'
+        'def execute(self, feature_id: str):\n'
+        '    return result\n'
+    )
+    params = get_func_decl(_parse(parser, source)).type.params
+
+    # The declared parameter keeps its name and primitive type.
+    assert params[1].name == 'feature_id'
+    assert params[1].type.kind == TypeKind.STR
+
+# ** test: test_parse_method_return_type
+def test_parse_method_return_type(parser) -> None:
+    '''
+    Test a method return annotation.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The arrow annotation is the function return type.
+    source = _event('# * method: execute\ndef execute(self) -> int:\n    return result\n')
+    func = get_func_decl(_parse(parser, source))
+
+    # int is a primitive return type, not a class named int.
+    assert func.type.return_type.kind == TypeKind.INT
+
+# ** test: test_parse_method_init_name
+def test_parse_method_init_name(parser) -> None:
+    '''
+    Test an init member whose function name is __init__.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The member role is init. The function spelling stays __init__.
+    source = _event('# * init\ndef __init__(self):\n    return result\n')
+    module = _parse(parser, source)
+
+    # Both the header role and the function name are preserved.
+    assert get_member(module).artifact_role == 'init'
+    assert get_func_decl(module).name == '__init__'
+
+# ** test: test_parse_class_single_base
+def test_parse_class_single_base(parser) -> None:
+    '''
+    Test a class with one base class.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # A marker class still declares its base.
+    module = _parse(parser, _event('pass\n', doc='Marker.'))
+    cls = get_class_decl(module)
+
+    # The base is the class type's subtype, not a second class declaration.
+    assert cls.name == 'Sample'
+    assert cls.type.subtype.name == 'DomainEvent'
+
+# ** test: test_parse_class_marker_body_pass
+def test_parse_class_marker_body_pass(parser) -> None:
+    '''
+    Test a marker class whose body is pass.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # pass after a docstring is an empty member list, not a member.
+    module = _parse(parser, _event('pass\n', doc='Marker.'))
+    cls = get_class_decl(module)
+
+    # The docstring is kept and no member is invented.
+    assert 'Marker.' in cls.doc_string
+    assert cls.code == []
+
+# ** test: test_parse_multiple_members
+def test_parse_multiple_members(parser) -> None:
+    '''
+    Test multiple members on one class.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # An attribute and a method share the class body.
+    source = _event(
+        '# * attribute: service\n'
+        'service: ErrorService\n'
+        '# * method: execute\n'
+        'def execute(self):\n'
+        '    return result\n'
+    )
+    module = _parse(parser, source)
+
+    # Both members accumulate, in source order.
+    assert len(get_class_decl(module).code) == 2
+    assert get_member(module, 0).artifact_role == 'attribute'
+    assert get_member(module, 1).artifact_role == 'method'
+
+# ** test: test_parse_assign_stmt
+def test_parse_assign_stmt(parser) -> None:
+    '''
+    Test an assignment statement.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The assignment is an expression statement, not a declaration.
+    source = _event('# * method: execute\ndef execute(self):\n    result = value\n')
+    stmt = _statements(get_func_decl(_parse(parser, source)))[0]
+
+    # The target and the value are both names.
+    assert stmt.kind == StatementKind.EXPR
+    assert stmt.expr.encode() == 'Assign(result, value)'
+
+# ** test: test_parse_return_operation
+def test_parse_return_operation(parser) -> None:
+    '''
+    Test a return of an addition.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # Addition is an operator expression on the return.
+    source = _event('# * method: execute\ndef execute(self):\n    return a + b\n')
+    stmt = _statements(get_func_decl(_parse(parser, source)))[0]
+
+    # The encoding names the operator and both operands.
+    assert stmt.kind == StatementKind.RETURN
+    assert stmt.encode() == 'Return(Add(a, b))'
+
+# ** test: test_parse_tuple_yield
+def test_parse_tuple_yield(parser) -> None:
+    '''
+    Test a tuple-valued yield.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # yield of several names is an expression statement, not a yield kind.
+    source = _event(
+        '# * method: execute\n'
+        'def execute(self):\n'
+        '    yield event, step, params\n'
+    )
+    stmt = _statements(get_func_decl(_parse(parser, source)))[0]
+
+    # The statement is EXPR and the expression encodes the tuple.
+    assert stmt.kind == StatementKind.EXPR
+    assert stmt.expr.kind == ExprKind.TUPLE
+    assert stmt.expr.encode() == 'Tuple(event, step, params)'
+
+# ** test: test_parse_snippet_with_comment
+def test_parse_snippet_with_comment(parser) -> None:
+    '''
+    Test that a line comment heads a snippet.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The comment is not an executable statement.
+    source = _event(
+        '# * method: execute\n'
+        'def execute(self):\n'
+        '    # Return the value.\n'
+        '    return result\n'
+    )
+    snippet = get_func_decl(_parse(parser, source)).code[0]
+
+    # The comment heads the snippet. The return stays in the body.
+    assert snippet.comments
+    assert 'Return the value.' in snippet.comments[0].expr.encode()
+    assert snippet.body[0].kind == StatementKind.RETURN
+
+# ** test: test_parse_multiple_snippets
+def test_parse_multiple_snippets(parser) -> None:
+    '''
+    Test successive comment-headed snippets.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # Each comment starts its own snippet.
+    source = _event(
+        '# * method: execute\n'
+        'def execute(self):\n'
+        '    # First.\n'
+        '    result = value\n'
+        '    # Second.\n'
+        '    return result\n'
+    )
+    snippets = get_func_decl(_parse(parser, source)).code
+
+    # Two snippets, each with its own comment and statement.
+    assert len(snippets) == 2
+    assert snippets[0].body[0].expr.encode() == 'Assign(result, value)'
+    assert snippets[1].body[0].kind == StatementKind.RETURN
+
+# ** test: test_parse_empty_module
+def test_parse_empty_module(parser) -> None:
+    '''
+    Test an empty group list.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # No tokens still select the declared catalogues.
+    module = parser.parse('sample', [])
+
+    # The module exists and has no groups.
+    assert module.name == '__main__'
+    assert module.code == []
+
+# ** test: test_parse_two_groups
+def test_parse_two_groups(parser) -> None:
+    '''
+    Test two top-level groups.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The second group starts immediately after the import.
+    source = (
+        '# *** imports\n'
+        '# ** core\n'
+        'import typing\n'
+        '# *** events\n'
+        '# ** event: sample\n'
+        'class Sample(DomainEvent):\n'
+        '    """Marker."""\n'
+        '    pass\n'
+    )
+    module = _parse(parser, source)
+
+    # Both groups are kept, in source order.
+    assert [get_group(module, index).decl.name for index in (0, 1)] == [
+        'imports',
+        'events',
+    ]
+
+# ** test: test_parse_two_sections
+def test_parse_two_sections(parser) -> None:
+    '''
+    Test two sections in one group.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # Each section has its own class.
+    source = (
+        '# *** events\n'
+        '# ** event: one\n'
+        'class One(DomainEvent):\n'
+        '    """One."""\n'
+        '    pass\n'
+        '# ** event: two\n'
+        'class Two(DomainEvent):\n'
+        '    """Two."""\n'
+        '    pass\n'
+    )
+    module = _parse(parser, source)
+
+    # The group holds both sections.
+    assert get_section(module, s=0).decl.name == 'one'
+    assert get_section(module, s=1).decl.name == 'two'
+    assert get_class_decl(module, s=1).name == 'Two'
+
+# ** test: test_parse_module_docstring
+def test_parse_module_docstring(parser) -> None:
+    '''
+    Test a module docstring.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The docstring precedes the first group.
+    source = '"""Module docs."""\n' + _event('pass\n', doc='Marker.')
+    module = _parse(parser, source)
+
+    # The docstring is stored on the module, not as a group.
+    assert 'Module docs.' in module.doc_string
+    assert get_group(module).decl.name == 'events'
+
+# ** test: test_parse_error_unexpected_token
+def test_parse_error_unexpected_token(parser) -> None:
+    '''
+    Test that an unexpected token raises.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # yield is a token, but not a section body.
+    with pytest.raises(ServiceError):
+        _parse(parser, '# *** events\n# ** event: sample\nyield\n')
+
+# ** test: test_parse_error_unexpected_eof
+def test_parse_error_unexpected_eof(parser) -> None:
+    '''
+    Test that an unexpected end of file raises.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The class header is opened and never closed.
+    with pytest.raises(ServiceError):
+        _parse(parser, '# *** events\n# ** event: sample\nclass Sample(DomainEvent):\n')
+
+# ** test: test_parse_assign_call_rhs
+def test_parse_assign_call_rhs(parser) -> None:
+    '''
+    Test an assignment whose right-hand side is a call.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The call is the assigned value.
+    source = _event('# * method: execute\ndef execute(self):\n    result = Field()\n')
+    expr = _statements(get_func_decl(_parse(parser, source)))[0].expr
+
+    # The right-hand side encodes as a call.
+    assert expr.kind == ExprKind.ASSIGN
+    assert expr.right.kind == ExprKind.CALL
+    assert expr.encode() == 'Assign(result, Call(Field))'
+
+# ** test: test_parse_assign_operation_rhs
+def test_parse_assign_operation_rhs(parser) -> None:
+    '''
+    Test an assignment whose right-hand side is an operation.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # Addition is the assigned value.
+    source = _event('# * method: execute\ndef execute(self):\n    result = a + b\n')
+    expr = _statements(get_func_decl(_parse(parser, source)))[0].expr
+
+    # The right-hand side encodes as addition.
+    assert expr.right.kind == ExprKind.ADD
+    assert expr.encode() == 'Assign(result, Add(a, b))'
+
+# ** test: test_parse_if_stmt
+def test_parse_if_stmt(parser) -> None:
+    '''
+    Test an if statement.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The body is indented under the condition.
+    source = _event(
+        '# * method: execute\n'
+        'def execute(self):\n'
+        '    if flag:\n'
+        '        return result\n'
+    )
+    stmt = _statements(get_func_decl(_parse(parser, source)))[0]
+
+    # The condition and the return body are both present.
+    assert stmt.kind == StatementKind.IF_ELSE
+    assert stmt.encode() == 'If(flag, [Return(result)])'
+
+# ** test: test_parse_and_or_expr
+def test_parse_and_or_expr(parser) -> None:
+    '''
+    Test and / or expressions.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # and binds tighter than or.
+    source = _event(
+        '# * method: execute\n'
+        'def execute(self):\n'
+        '    return a and b or c\n'
+    )
+    stmt = _statements(get_func_decl(_parse(parser, source)))[0]
+
+    # The encoding shows the precedence.
+    assert stmt.encode() == 'Return(Or(And(a, b), c))'
+
+# ** test: test_parse_list_literal
+def test_parse_list_literal(parser) -> None:
+    '''
+    Test a list literal.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The list is the returned expression.
+    source = _event('# * method: execute\ndef execute(self):\n    return [a, b]\n')
+    expr = _statements(get_func_decl(_parse(parser, source)))[0].expr
+
+    # Both elements are kept.
+    assert expr.kind == ExprKind.LIST_LITERAL
+    assert expr.encode() == 'List(a, b)'
+
+# ** test: test_parse_subscript
+def test_parse_subscript(parser) -> None:
+    '''
+    Test a subscript expression.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The index is part of the returned expression.
+    source = _event('# * method: execute\ndef execute(self):\n    return items[0]\n')
+    expr = _statements(get_func_decl(_parse(parser, source)))[0].expr
+
+    # The target and the index are both encoded.
+    assert expr.kind == ExprKind.SUBSCRIPT
+    assert expr.encode() == 'Subscript(items, 0)'
+
+# ** test: test_parse_for_stmt
+def test_parse_for_stmt(parser) -> None:
+    '''
+    Test a for statement.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The target, iterable, and body are one statement.
+    source = _event(
+        '# * method: execute\n'
+        'def execute(self):\n'
+        '    for item in items:\n'
+        '        return item\n'
+    )
+    stmt = _statements(get_func_decl(_parse(parser, source)))[0]
+
+    # The encoding names the target and the iterable.
+    assert stmt.kind == StatementKind.FOR
+    assert stmt.encode() == 'For(item, items, [Return(item)])'
+
+# ** test: test_parse_try_except
+def test_parse_try_except(parser) -> None:
+    '''
+    Test a try/except statement.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The handler is stored with the try, not as a following statement.
+    source = _event(
+        '# * method: execute\n'
+        'def execute(self):\n'
+        '    try:\n'
+        '        return result\n'
+        '    except Error:\n'
+        '        return other\n'
+    )
+    stmt = _statements(get_func_decl(_parse(parser, source)))[0]
+
+    # The try body and one handler are both present.
+    assert stmt.kind == StatementKind.TRY_EXCEPT
+    assert 'TryExcept' in stmt.encode()
+    assert len(stmt.else_body) == 1
+
+# ** test: test_parse_with_stmt
+def test_parse_with_stmt(parser) -> None:
+    '''
+    Test a with statement.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The target is the name after as.
+    source = _event(
+        '# * method: execute\n'
+        'def execute(self):\n'
+        '    with context as target:\n'
+        '        return target\n'
+    )
+    stmt = _statements(get_func_decl(_parse(parser, source)))[0]
+
+    # The context, target, and body are encoded together.
+    assert stmt.kind == StatementKind.WITH
+    assert stmt.encode() == 'With(context, target, [Return(target)])'
+
+# ** test: test_parse_assert_stmt
+def test_parse_assert_stmt(parser) -> None:
+    '''
+    Test an assert statement.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # assert is its own statement kind.
+    source = _event('# * method: execute\ndef execute(self):\n    assert flag\n')
+    stmt = _statements(get_func_decl(_parse(parser, source)))[0]
+
+    # The condition is the primary expression.
+    assert stmt.kind == StatementKind.ASSERT
+    assert stmt.encode() == 'Assert(flag)'
+
+# ** test: test_parse_if_inline
+def test_parse_if_inline(parser) -> None:
+    '''
+    Test an inline if statement.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The body shares the condition's line.
+    source = _event(
+        '# * method: execute\n'
+        'def execute(self):\n'
+        '    if flag: return result\n'
+    )
+    stmt = _statements(get_func_decl(_parse(parser, source)))[0]
+
+    # An inline if is still an if statement.
+    assert stmt.kind == StatementKind.IF_ELSE
+    assert stmt.encode() == 'If(flag, [Return(result)])'
+
+# ** test: test_parse_call_double_star_arg
+def test_parse_call_double_star_arg(parser) -> None:
+    '''
+    Test a call argument introduced by **.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The double-star argument is part of the call.
+    source = _event(
+        '# * method: execute\n'
+        'def execute(self):\n'
+        '    return build(**kwargs)\n'
+    )
+    expr = _statements(get_func_decl(_parse(parser, source)))[0].expr
+
+    # The encoding keeps the ** spelling.
+    assert expr.kind == ExprKind.CALL
+    assert expr.encode() == 'Call(build, **kwargs)'
+
+# ** test: test_parse_single_function
+def test_parse_single_function(parser) -> None:
+    '''
+    Test a module-level function.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The function lives in a functions section, not a class.
+    source = (
+        '# *** functions\n'
+        '# ** function: helper\n'
+        'def helper():\n'
+        '    return value\n'
+    )
+    module = _parse(parser, source)
+    func = get_function_decl(module)
+
+    # The section and the function share the declared name.
+    assert get_section(module).decl.name == 'helper'
+    assert func.name == 'helper'
+    assert _statements(func)[0].encode() == 'Return(value)'
+
+# ** test: test_function_has_no_self
+def test_function_has_no_self(parser) -> None:
+    '''
+    Test that a module-level function has no self parameter.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # No receiver is written, and none is inserted.
+    source = (
+        '# *** functions\n'
+        '# ** function: helper\n'
+        'def helper():\n'
+        '    return value\n'
+    )
+    params = get_function_decl(_parse(parser, source)).type.params
+
+    # self is a method receiver, not a function parameter.
+    assert params == []
+    assert all(param.name != 'self' for param in params)
+
+# ** test: test_parse_function_params_and_return
+def test_parse_function_params_and_return(parser) -> None:
+    '''
+    Test function parameters and a return annotation.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The parameter annotation and the return annotation are separate.
+    source = (
+        '# *** functions\n'
+        '# ** function: helper\n'
+        'def helper(name: str) -> int:\n'
+        '    return value\n'
+    )
+    func = get_function_decl(_parse(parser, source))
+
+    # Neither annotation is dropped.
+    assert func.type.params[0].name == 'name'
+    assert func.type.params[0].type.kind == TypeKind.STR
+    assert func.type.return_type.kind == TypeKind.INT
+
+# ** test: test_parse_multiple_functions
+def test_parse_multiple_functions(parser) -> None:
+    '''
+    Test several module-level functions.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # Each function is its own section.
+    source = (
+        '# *** functions\n'
+        '# ** function: alpha\n'
+        'def alpha():\n'
+        '    return value\n'
+        '# ** function: beta\n'
+        'def beta():\n'
+        '    return value\n'
+    )
+    module = _parse(parser, source)
+
+    # Both functions are present, in source order.
+    assert get_function_decl(module, s=0).name == 'alpha'
+    assert get_function_decl(module, s=1).name == 'beta'
+    assert len(get_group(module).body) == 2
+
+# ** test: test_member_post_annotated_see_sets_guide_path
+def test_member_post_annotated_see_sets_guide_path(parser) -> None:
+    '''
+    Test that SEE after a member sets guide_path.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The annotation follows the member header and precedes the method.
+    source = _event(
+        '# * method: execute\n'
+        '# >> see: @guides/domain/error.md#error\n'
+        'def execute(self):\n'
+        '    return result\n'
+    )
+    member = get_member(_parse(parser, source))
+
+    # The first SEE is promoted to the guide path.
+    assert member.guide_path == '@guides/domain/error.md#error'
+
+# ** test: test_section_post_annotated_see_sets_guide_path
+def test_section_post_annotated_see_sets_guide_path(parser) -> None:
+    '''
+    Test that SEE after a section sets guide_path.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The annotation follows the section header and precedes the class.
+    source = (
+        '# *** events\n'
+        '# ** event: sample\n'
+        '# >> see: docs/guides/domain/error.md#error\n'
+        'class Sample(DomainEvent):\n'
+        '    """Marker."""\n'
+        '    pass\n'
+    )
+    section = get_section(_parse(parser, source))
+
+    # The section header carries the guide path.
+    assert section.decl.guide_path == 'docs/guides/domain/error.md#error'
+
+# ** test: test_member_see_stacks_with_todo
+def test_member_see_stacks_with_todo(parser) -> None:
+    '''
+    Test that SEE and TODO annotations stack.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # TODO does not hide the following SEE.
+    source = _event(
+        '# * method: execute\n'
+        '# ++ todo: later\n'
+        '# >> see: @guides/domain/error.md#error\n'
+        'def execute(self):\n'
+        '    return result\n'
+    )
+    member = get_member(_parse(parser, source))
+
+    # Both notes are stored, and the SEE still sets the guide path.
+    assert [annot['kind'] for annot in member.annotations] == ['TODO', 'SEE']
+    assert member.guide_path == '@guides/domain/error.md#error'

@@ -6,3 +6,4 @@
 from .docstring import DocstringParser
 from .lexer import TiferetLexer
 from .output import ScanOutputWriter
+from .parser import TiferetParser

@@ -7,10 +7,24 @@ import re
 from typing import Any, Callable, List, Optional, Tuple
 
 # ** infra
+from tiferet_ly.domain.grammar import Grammar
+from tiferet_ly.domain.production import ProductionRule
+from tiferet_ly.domain.token import TokenRule
 from tiferet_ly.utils.parse import PlyParser as LyPlyParser
 
 # ** app
-from ..mappers import Type
+from ..interfaces import ParserService
+from ..mappers import (
+    ArtifactDecl,
+    ArtifactStmt,
+    Decl,
+    Expr,
+    ParamList,
+    SnippetStmt,
+    Stmt,
+    TokenAggregate,
+    Type,
+)
 from ..mappers.ast import ExprKind, TypeKind
 
 # *** constants
@@ -416,3 +430,90 @@ class PlyParser(LyPlyParser):
         # Attach only when the landed node is itself an if.
         if target.is_if_else:
             target.else_body = else_body
+
+# ** util: tiferet_parser
+class TiferetParser(ParserService):
+    '''
+    Adapt a recognized token stream into a module AST without hosting productions.
+
+    Callers supply the catalogues. This adapter converts tokens to lexemes,
+    binds the rewrite table for one source text, and delegates the parse.
+    '''
+
+    # * method: parse
+    def parse(self, module_name: str,
+              tokens: List[TokenAggregate],
+              grammars: List[Grammar],
+              token_rules: List[TokenRule],
+              production_rules: List[ProductionRule],
+              source_text: str = '') -> Any:
+        '''
+        Parse a recognized token stream into a root module AST.
+
+        :param module_name: Module being parsed.
+        :type module_name: str
+        :param tokens: Already-recognized token stream.
+        :type tokens: List[TokenAggregate]
+        :param grammars: Declared grammar catalogue.
+        :type grammars: List[Grammar]
+        :param token_rules: Declared token-rule catalogue.
+        :type token_rules: List[TokenRule]
+        :param production_rules: Declared production-rule catalogue.
+        :type production_rules: List[ProductionRule]
+        :param source_text: Original source text used only for column calculation.
+        :type source_text: str
+        :return: The root module AST.
+        :rtype: Any
+        '''
+
+        # module_name is part of the service contract; catalogues name the module.
+        _ = module_name
+
+        # Convert recognized tokens. Do not re-lex source_text.
+        lexemes = [token.to_lexeme() for token in tokens]
+
+        # Build position closures scoped to this source text.
+        (
+            pos,
+            find_column,
+            set_last_op_pos,
+            get_last_op_pos,
+            set_last_ident_pos,
+            get_last_ident_pos,
+        ) = make_position_helpers(source_text)
+
+        # Bind exactly the rewrite-table keys from the helper story.
+        rewrites = {
+            '$decl': Decl,
+            '$stmt': Stmt,
+            '$expr': Expr,
+            '$type': Type,
+            '$param_list': ParamList,
+            '$artifact_decl': ArtifactDecl,
+            '$artifact_stmt': ArtifactStmt,
+            '$snippet_stmt': SnippetStmt,
+            '$parse_artifact_header': parse_artifact_header,
+            '$parse_see_guide_path': parse_see_guide_path,
+            '$apply_annotations': PlyParser.apply_annotations,
+            '$parse_member_kind': parse_member_kind,
+            '$parse_member_qualifier': parse_member_qualifier,
+            '$get_attribute_type': get_attribute_type,
+            '$render_lambda_body': render_lambda_body,
+            '$attach_dangling_else': PlyParser.attach_dangling_else,
+            '$pos': pos,
+            '$find_column': find_column,
+            '$set_last_op_pos': set_last_op_pos,
+            '$get_last_op_pos': get_last_op_pos,
+            '$set_last_ident_pos': set_last_ident_pos,
+            '$get_last_ident_pos': get_last_ident_pos,
+        }
+
+        # Delegate to the published parser. This class hosts no p_* productions.
+        return PlyParser().parse(
+            GRAMMAR_ID,
+            grammars,
+            token_rules,
+            production_rules,
+            lexemes=lexemes,
+            rewrites=rewrites,
+        )
