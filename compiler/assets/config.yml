@@ -1,0 +1,114 @@
+# Compiler pipeline configuration.
+# Phases are component-agnostic. The component type arrives as request data, not as a command name.
+
+services:
+  token_service:
+    module_path: tiferet_ly.repos.token
+    class_name: TokenConfigRepository
+  grammar_service:
+    module_path: tiferet_ly.repos.grammar
+    class_name: GrammarConfigRepository
+  production_service:
+    module_path: tiferet_ly.repos.production
+    class_name: ProductionConfigRepository
+  lexer_service:
+    module_path: compiler.utils.lexer
+    class_name: TiferetLexer
+  parser_service:
+    module_path: compiler.utils.parser
+    class_name: TiferetParser
+  codegen_service:
+    module_path: compiler.utils.codegen
+    class_name: TiferetGenerator
+  optimizer_service:
+    module_path: compiler.utils.optimizer
+    class_name: YamlAnchorOptimizer
+  perform_lexical_analysis_event:
+    module_path: compiler.events.lexer
+    class_name: PerformLexicalAnalysis
+  emit_scan_result_event:
+    module_path: compiler.events.lexer
+    class_name: EmitScanResult
+  perform_syntactic_analysis_event:
+    module_path: compiler.events.parser
+    class_name: PerformSyntacticAnalysis
+  emit_parse_result_event:
+    module_path: compiler.events.parser
+    class_name: EmitParseResult
+  perform_semantic_analysis_event:
+    module_path: compiler.events.semantic
+    class_name: PerformSemanticAnalysis
+  check_common_conformance_event:
+    module_path: compiler.events.typecheck
+    class_name: CheckCommonConformance
+  check_event_conformance_event:
+    module_path: compiler.events.typecheck
+    class_name: CheckEventConformance
+  check_asset_conformance_event:
+    module_path: compiler.events.typecheck
+    class_name: CheckAssetConformance
+  check_domain_conformance_event:
+    module_path: compiler.events.typecheck
+    class_name: CheckDomainConformance
+  check_mapper_conformance_event:
+    module_path: compiler.events.typecheck
+    class_name: CheckMapperConformance
+  check_interface_conformance_event:
+    module_path: compiler.events.typecheck
+    class_name: CheckInterfaceConformance
+  check_di_conformance_event:
+    module_path: compiler.events.typecheck
+    class_name: CheckDIConformance
+  check_utils_conformance_event:
+    module_path: compiler.events.typecheck
+    class_name: CheckUtilsConformance
+  check_context_conformance_event:
+    module_path: compiler.events.typecheck
+    class_name: CheckContextsConformance
+  check_blueprints_conformance_event:
+    module_path: compiler.events.typecheck
+    class_name: CheckBlueprintsConformance
+  check_repos_conformance_event:
+    module_path: compiler.events.typecheck
+    class_name: CheckReposConformance
+  emit_semantic_result_event:
+    module_path: compiler.events.semantic
+    class_name: EmitSemanticResult
+  generate_code_event:
+    module_path: compiler.events.codegen
+    class_name: GenerateCode
+  optimize_code_event:
+    module_path: compiler.events.codegen
+    class_name: OptimizeCode
+  emit_codegen_result_event:
+    module_path: compiler.events.codegen
+    class_name: EmitCodegenResult
+  load_from_ast_event:
+    module_path: compiler.events.codegen
+    class_name: LoadFromAST
+
+const:
+  token_config: compiler/assets/tokens.yml
+  grammar_config: compiler/assets/grammars.yml
+  production_config: compiler/assets/productions.yml
+
+logging: {}
+
+sessions:
+  compiler:
+    name: Tiferet Dialect Compiler
+    description: Component-agnostic compiler session. The component type arrives as request data.
+    const:
+      di_config: compiler/assets/config.yml
+      feature_config: compiler/assets/feature.yml
+      error_config: compiler/assets/errors.yml
+      logging_config: compiler/assets/config.yml
+  compiler_cli:
+    name: Compiler CLI
+    description: Component-agnostic compiler CLI. The component type arrives as request data.
+    const:
+      di_config: compiler/assets/config.yml
+      feature_config: compiler/assets/feature.yml
+      error_config: compiler/assets/errors.yml
+      logging_config: compiler/assets/config.yml
+      cli_config: compiler/assets/cli.yml

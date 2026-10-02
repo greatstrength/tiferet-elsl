@@ -24,6 +24,16 @@ errors:
     message:
       - lang: en_US
         text: 'No AST received from syntactic analysis'
+  TYPE_MISMATCH_ASSIGNMENT:
+    name: Type Mismatch in Assignment
+    message:
+      - lang: en_US
+        text: 'Cannot assign {actual_type} to variable declared as {expected_type}'
+  TYPE_MISMATCH_OPERATION:
+    name: Type Mismatch in Operation
+    message:
+      - lang: en_US
+        text: 'Unsupported operand types for {operation}: {left_type} and {right_type}'
   INVALID_CODEGEN_SCHEMA:
     name: Invalid Codegen Schema
     message:
