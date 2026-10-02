@@ -85,6 +85,7 @@ Frozen surfaces are whatever `compiler/tests/test_schema_freeze.py` locks, plus 
 
 Guides correspond to a package, a module, or a test. They are not the agent catalog.
 
+- [docs/guides/cli.md](docs/guides/cli.md) — `compiler/cli.py` and `compiler/assets/cli.yml`
 - [docs/guides/assets.md](docs/guides/assets.md) — `compiler/assets/`
 - [docs/guides/events/typecheck.md](docs/guides/events/typecheck.md) — `compiler/events/typecheck.py`
 - [docs/guides/utils/typecheck.md](docs/guides/utils/typecheck.md) — `compiler/utils/typecheck.py`

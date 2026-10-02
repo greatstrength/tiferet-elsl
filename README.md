@@ -36,6 +36,7 @@ source .venv/bin/activate && python -m pytest compiler -q
 
 ## Read next
 
+- [CLI guide](docs/guides/cli.md) — how to run `tiferet-compiler`
 - [AGENTS.md](AGENTS.md) — orientation for working in this repository
 - [Domain vision](docs/domain-vision.md)
 - [Core domain distillation](docs/core-domain-distillation.md)
