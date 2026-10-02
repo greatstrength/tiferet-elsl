@@ -1,0 +1,79 @@
+name: release-compiler
+
+on:
+  push:
+    tags:
+      - 'compiler/v*'
+
+permissions:
+  contents: write
+
+jobs:
+  # Expressions have no regex. This job applies ^compiler/v[0-9]+\.[0-9]+\.[0-9]+$
+  # so the release job is skipped for aN, bN, and rc tags the compiler/v* glob matches.
+  official-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      match: ${{ steps.match.outputs.match }}
+    steps:
+      - name: Match compiler/vX.Y.Z
+        id: match
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [[ "$REF_NAME" =~ ^compiler/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "match=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "match=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  release:
+    needs: official-tag
+    if: needs.official-tag.outputs.match == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install
+        run: pip install -e ".[dev]" build
+
+      - name: Version gate
+        run: |
+          VERSION="${GITHUB_REF_NAME#compiler/v}"
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+          python -c "import compiler, sys; sys.exit(0 if compiler.__version__ == '''$VERSION''' else 1)"
+
+      - name: Test
+        run: pytest compiler -q
+
+      - name: Build
+        run: python -m build
+
+      - name: Dist names
+        run: |
+          ls -1 dist
+          sdist="dist/tiferet_compiler-${VERSION}.tar.gz"
+          if [[ ! -f "$sdist" ]]; then
+            echo "missing normalized sdist ${sdist}"
+            exit 1
+          fi
+          wheel=$(find dist -name "tiferet_compiler-${VERSION}-*.whl" -print -quit)
+          if [[ -z "$wheel" ]]; then
+            echo "missing normalized wheel tiferet_compiler-${VERSION}"
+            exit 1
+          fi
+          if find dist -name '*command-parser-edu*' | grep -q .; then
+            echo "retired distribution name present"
+            exit 1
+          fi
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "${{ github.ref_name }}" dist/* --title "Compiler v${VERSION}" --generate-notes
