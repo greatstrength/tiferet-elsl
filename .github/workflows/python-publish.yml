@@ -1,0 +1,74 @@
+# Builds the root distribution when a GitHub Release is published.
+# The tag must be v plus compiler.__version__, as in the other framework
+# components. Assets are attached to that release. This does not publish to PyPI.
+
+name: python-publish
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install
+        run: pip install -e ".[dev]" build
+
+      - name: Extract version
+        id: get_version
+        run: |
+          VERSION=$(python -c "from compiler import __version__; print(__version__)")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Validate version matches release tag
+        run: |
+          RELEASE_TAG=${{ github.event.release.tag_name }}
+          PACKAGE_VERSION=${{ steps.get_version.outputs.version }}
+          if [ "$RELEASE_TAG" != "v$PACKAGE_VERSION" ]; then
+            echo "Error: Release tag ($RELEASE_TAG) does not match package version ($PACKAGE_VERSION)"
+            exit 1
+          fi
+
+      - name: Test
+        run: pytest compiler -q
+
+      - name: Build
+        run: python -m build
+
+      - name: Dist names
+        run: |
+          ls -1 dist
+          sdist="dist/tiferet_elsl-${VERSION}.tar.gz"
+          if [[ ! -f "$sdist" ]]; then
+            echo "missing normalized sdist ${sdist}"
+            exit 1
+          fi
+          wheel=$(find dist -name "tiferet_elsl-${VERSION}-*.whl" -print -quit)
+          if [[ -z "$wheel" ]]; then
+            echo "missing normalized wheel tiferet_elsl-${VERSION}"
+            exit 1
+          fi
+          if find dist -name '*command-parser-edu*' | grep -q .; then
+            echo "retired distribution name present"
+            exit 1
+          fi
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/* --clobber
