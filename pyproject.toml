@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tiferet-compiler"
+version = "1.0.0"
+description = "Domain-specific compiler for Tiferet component dialects"
+license = {text = "Proprietary — All Rights Reserved"}
+classifiers = [
+    "License :: Other/Proprietary License",
+    "Private :: Do Not Upload",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "tiferet>=2.1.1,<2.2",
+    "tiferet-ly>=1.0.0b3",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+    "compiler*",
+]
+
+[tool.setuptools.package-data]
+compiler = ["assets/*.yml"]
+
+[tool.pytest.ini_options]
+testpaths = ["compiler"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
