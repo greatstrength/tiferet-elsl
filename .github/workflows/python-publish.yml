@@ -53,14 +53,14 @@ jobs:
       - name: Dist names
         run: |
           ls -1 dist
-          sdist="dist/tiferet_compiler-${VERSION}.tar.gz"
+          sdist="dist/tiferet_elsl-${VERSION}.tar.gz"
           if [[ ! -f "$sdist" ]]; then
             echo "missing normalized sdist ${sdist}"
             exit 1
           fi
-          wheel=$(find dist -name "tiferet_compiler-${VERSION}-*.whl" -print -quit)
+          wheel=$(find dist -name "tiferet_elsl-${VERSION}-*.whl" -print -quit)
           if [[ -z "$wheel" ]]; then
-            echo "missing normalized wheel tiferet_compiler-${VERSION}"
+            echo "missing normalized wheel tiferet_elsl-${VERSION}"
             exit 1
           fi
           if find dist -name '*command-parser-edu*' | grep -q .; then
