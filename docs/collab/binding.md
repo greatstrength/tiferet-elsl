@@ -19,8 +19,8 @@ fork those process docs into this repository.
 | RFP major | `1` |
 | Next freeze id pattern | `ESL1-FREEZE-<nnn>` |
 
-`v1.x-proto` is the conventional prototype branch name. It is not cut. The
-in-flight reconstruction is trunk-only.
+`v1.x-proto` is the conventional prototype branch name. It is still not cut.
+The trunk reconstruction through `v1.0.0` is closed.
 
 `TTC1-FREEZE-001` is the catalog freeze for the reconstruction on trunk
 milestones `v0.1.0` through `v1.0.0`. It was minted on
