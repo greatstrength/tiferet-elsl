@@ -32,6 +32,9 @@ include = [
 [tool.setuptools.package-data]
 compiler = ["assets/*.yml"]
 
+[project.scripts]
+tiferet-compiler = "compiler.cli:main"
+
 [tool.pytest.ini_options]
 testpaths = ["compiler"]
 python_files = ["test_*.py"]
