@@ -112,14 +112,13 @@ class CheckCommonConformance(ConformanceEvent):
         :type semantic: Dict[str, Any]
         :param findings: Prior findings to prepend. None is an empty list.
         :type findings: List[Dict]
-        :param kwargs: Additional keyword arguments. ``component`` is not read.
+        :param kwargs: Middleware keyword arguments, such as logging, caching, and timing. Passed through and not consumed. ``component`` is not read.
         :type kwargs: dict
         :return: Prior findings followed by common findings.
         :rtype: List[Dict]
         '''
 
-        # Delegate to the bound rule set. Do not read component.
-        del kwargs
+        # Delegate to the bound rule set. Leave kwargs for middleware.
         return self.run_rule_set(ast, semantic, findings)
 
 # ** event: check_event_conformance
@@ -151,14 +150,13 @@ class CheckEventConformance(ConformanceEvent):
         :type semantic: Dict[str, Any]
         :param findings: Prior findings to prepend. None is an empty list.
         :type findings: List[Dict]
-        :param kwargs: Additional keyword arguments. ``component`` is not read.
+        :param kwargs: Middleware keyword arguments, such as logging, caching, and timing. Passed through and not consumed. ``component`` is not read.
         :type kwargs: dict
         :return: Prior findings followed by events findings.
         :rtype: List[Dict]
         '''
 
-        # Delegate to the bound rule set. Do not read component.
-        del kwargs
+        # Delegate to the bound rule set. Leave kwargs for middleware.
         return self.run_rule_set(ast, semantic, findings)
 
 # ** event: check_asset_conformance
@@ -190,14 +188,13 @@ class CheckAssetConformance(ConformanceEvent):
         :type semantic: Dict[str, Any]
         :param findings: Prior findings to prepend. None is an empty list.
         :type findings: List[Dict]
-        :param kwargs: Additional keyword arguments. ``component`` is not read.
+        :param kwargs: Middleware keyword arguments, such as logging, caching, and timing. Passed through and not consumed. ``component`` is not read.
         :type kwargs: dict
         :return: Prior findings followed by assets findings.
         :rtype: List[Dict]
         '''
 
-        # Delegate to the bound rule set. Do not read component.
-        del kwargs
+        # Delegate to the bound rule set. Leave kwargs for middleware.
         return self.run_rule_set(ast, semantic, findings)
 
 # ** event: check_domain_conformance
@@ -229,14 +226,13 @@ class CheckDomainConformance(ConformanceEvent):
         :type semantic: Dict[str, Any]
         :param findings: Prior findings to prepend. None is an empty list.
         :type findings: List[Dict]
-        :param kwargs: Additional keyword arguments. ``component`` is not read.
+        :param kwargs: Middleware keyword arguments, such as logging, caching, and timing. Passed through and not consumed. ``component`` is not read.
         :type kwargs: dict
         :return: Prior findings followed by domain findings.
         :rtype: List[Dict]
         '''
 
-        # Delegate to the bound rule set. Do not read component.
-        del kwargs
+        # Delegate to the bound rule set. Leave kwargs for middleware.
         return self.run_rule_set(ast, semantic, findings)
 
 # ** event: check_mapper_conformance
@@ -268,14 +264,13 @@ class CheckMapperConformance(ConformanceEvent):
         :type semantic: Dict[str, Any]
         :param findings: Prior findings to prepend. None is an empty list.
         :type findings: List[Dict]
-        :param kwargs: Additional keyword arguments. ``component`` is not read.
+        :param kwargs: Middleware keyword arguments, such as logging, caching, and timing. Passed through and not consumed. ``component`` is not read.
         :type kwargs: dict
         :return: Prior findings followed by mappers findings.
         :rtype: List[Dict]
         '''
 
-        # Delegate to the bound rule set. Do not read component.
-        del kwargs
+        # Delegate to the bound rule set. Leave kwargs for middleware.
         return self.run_rule_set(ast, semantic, findings)
 
 # ** event: check_interface_conformance
@@ -307,14 +302,13 @@ class CheckInterfaceConformance(ConformanceEvent):
         :type semantic: Dict[str, Any]
         :param findings: Prior findings to prepend. None is an empty list.
         :type findings: List[Dict]
-        :param kwargs: Additional keyword arguments. ``component`` is not read.
+        :param kwargs: Middleware keyword arguments, such as logging, caching, and timing. Passed through and not consumed. ``component`` is not read.
         :type kwargs: dict
         :return: Prior findings followed by interfaces findings.
         :rtype: List[Dict]
         '''
 
-        # Delegate to the bound rule set. Do not read component.
-        del kwargs
+        # Delegate to the bound rule set. Leave kwargs for middleware.
         return self.run_rule_set(ast, semantic, findings)
 
 # ** event: check_di_conformance
@@ -346,14 +340,13 @@ class CheckDIConformance(ConformanceEvent):
         :type semantic: Dict[str, Any]
         :param findings: Prior findings to prepend. None is an empty list.
         :type findings: List[Dict]
-        :param kwargs: Additional keyword arguments. ``component`` is not read.
+        :param kwargs: Middleware keyword arguments, such as logging, caching, and timing. Passed through and not consumed. ``component`` is not read.
         :type kwargs: dict
         :return: Prior findings followed by di findings.
         :rtype: List[Dict]
         '''
 
-        # Delegate to the bound rule set. Do not read component.
-        del kwargs
+        # Delegate to the bound rule set. Leave kwargs for middleware.
         return self.run_rule_set(ast, semantic, findings)
 
 # ** event: check_utils_conformance
@@ -385,14 +378,13 @@ class CheckUtilsConformance(ConformanceEvent):
         :type semantic: Dict[str, Any]
         :param findings: Prior findings to prepend. None is an empty list.
         :type findings: List[Dict]
-        :param kwargs: Additional keyword arguments. ``component`` is not read.
+        :param kwargs: Middleware keyword arguments, such as logging, caching, and timing. Passed through and not consumed. ``component`` is not read.
         :type kwargs: dict
         :return: Prior findings followed by utils findings.
         :rtype: List[Dict]
         '''
 
-        # Delegate to the bound rule set. Do not read component.
-        del kwargs
+        # Delegate to the bound rule set. Leave kwargs for middleware.
         return self.run_rule_set(ast, semantic, findings)
 
 # ** event: check_contexts_conformance
@@ -424,14 +416,13 @@ class CheckContextsConformance(ConformanceEvent):
         :type semantic: Dict[str, Any]
         :param findings: Prior findings to prepend. None is an empty list.
         :type findings: List[Dict]
-        :param kwargs: Additional keyword arguments. ``component`` is not read.
+        :param kwargs: Middleware keyword arguments, such as logging, caching, and timing. Passed through and not consumed. ``component`` is not read.
         :type kwargs: dict
         :return: Prior findings followed by contexts findings.
         :rtype: List[Dict]
         '''
 
-        # Delegate to the bound rule set. Do not read component.
-        del kwargs
+        # Delegate to the bound rule set. Leave kwargs for middleware.
         return self.run_rule_set(ast, semantic, findings)
 
 # ** event: check_blueprints_conformance
@@ -463,14 +454,13 @@ class CheckBlueprintsConformance(ConformanceEvent):
         :type semantic: Dict[str, Any]
         :param findings: Prior findings to prepend. None is an empty list.
         :type findings: List[Dict]
-        :param kwargs: Additional keyword arguments. ``component`` is not read.
+        :param kwargs: Middleware keyword arguments, such as logging, caching, and timing. Passed through and not consumed. ``component`` is not read.
         :type kwargs: dict
         :return: Prior findings followed by blueprints findings.
         :rtype: List[Dict]
         '''
 
-        # Delegate to the bound rule set. Do not read component.
-        del kwargs
+        # Delegate to the bound rule set. Leave kwargs for middleware.
         return self.run_rule_set(ast, semantic, findings)
 
 # ** event: check_repos_conformance
@@ -502,12 +492,11 @@ class CheckReposConformance(ConformanceEvent):
         :type semantic: Dict[str, Any]
         :param findings: Prior findings to prepend. None is an empty list.
         :type findings: List[Dict]
-        :param kwargs: Additional keyword arguments. ``component`` is not read.
+        :param kwargs: Middleware keyword arguments, such as logging, caching, and timing. Passed through and not consumed. ``component`` is not read.
         :type kwargs: dict
         :return: Prior findings followed by repos findings.
         :rtype: List[Dict]
         '''
 
-        # Delegate to the bound rule set. Do not read component.
-        del kwargs
+        # Delegate to the bound rule set. Leave kwargs for middleware.
         return self.run_rule_set(ast, semantic, findings)
