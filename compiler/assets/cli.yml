@@ -1,0 +1,117 @@
+# Compiler CLI commands.
+# Phases are component-agnostic. The component type arrives as request data via -c/--component.
+# Shared arguments are anchored at first use and aliased after that.
+
+cli:
+  cmds:
+    scan:
+      module:
+        group_key: scan
+        key: module
+        name: Scan Module
+        description: Tokenize a source file. This command does not take a component type.
+        args:
+          - &source_file_arg
+            name_or_flags:
+              - source_file
+            description: Path of the source file.
+          - &output_arg
+            name_or_flags:
+              - -o
+              - --output
+            description: Path to YAML/JSON file.
+          - name_or_flags:
+              - --output-format
+            description: Serialization format for the scan result.
+          - name_or_flags:
+              - --summary-only
+            type: bool
+            description: Emit a summary only.
+    parse:
+      module:
+        group_key: parse
+        key: module
+        name: Parse Module
+        description: Parse a source file. This command does not take a component type.
+        args:
+          - *source_file_arg
+          - *output_arg
+          - &output_format_arg
+            name_or_flags:
+              - --output-format
+            default: auto
+            description: Serialization format. Defaults to auto.
+          - &include_tokens_arg
+            name_or_flags:
+              - --include-tokens
+            type: bool
+            description: Include the token list in the result.
+    semantic:
+      module:
+        group_key: semantic
+        key: module
+        name: Semantic Module
+        description: Analyze a source file. The component type arrives as request data.
+        args:
+          - *source_file_arg
+          - *output_arg
+          - *output_format_arg
+          - *include_tokens_arg
+          - name_or_flags:
+              - --include-ast
+            type: bool
+            description: Include the dumped AST in the result.
+          - &component_arg
+            name_or_flags:
+              - -c
+              - --component
+            description: Component type. Phases are component-agnostic; the type arrives as request data.
+            required: true
+            choices:
+              - assets
+              - blueprints
+              - contexts
+              - di
+              - domain
+              - events
+              - interfaces
+              - mappers
+              - repos
+              - utils
+    compile:
+      module:
+        group_key: compile
+        key: module
+        name: Compile Module
+        description: Compile a source file. The component type arrives as request data.
+        args:
+          - *source_file_arg
+          - *output_arg
+          - &compile_output_format_arg
+            name_or_flags:
+              - --output-format
+            default: auto
+            description: Serialization format. Defaults to auto. Choices are yaml, json, and auto.
+            choices:
+              - yaml
+              - json
+              - auto
+          - &optimization_arg
+            name_or_flags:
+              - -O
+            default: O0
+            description: Optimization level. O0 leaves codegen unchanged. O1 shares repeated structures.
+          - *component_arg
+      ast:
+        group_key: compile
+        key: ast
+        name: Compile AST
+        description: Compile a saved JSON AST. The component type arrives as request data.
+        args:
+          - name_or_flags:
+              - source_file
+            description: Path of the JSON AST file.
+          - *output_arg
+          - *compile_output_format_arg
+          - *optimization_arg
+          - *component_arg
