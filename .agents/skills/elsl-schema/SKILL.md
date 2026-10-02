@@ -57,6 +57,12 @@ Codegen: an events result is exactly `cmpt` and `evt_grp`. `evt_grp` is not insi
 
 Findings: every `service_id` that starts with `check_` and ends with `_conformance_event` uses `data_key: findings`. `CheckDomainConformance.execute` returns dicts that include `error_code` and `message`. Prior findings stay in front. The test does not lock other finding keys, and it does not call every dialect event.
 
+## Relation to ElohaSL
+
+The frozen output names are the language's public keys, not internal generator locals. `cmpt` is the component envelope. `evt_grp` is the legacy event-group document, and only for events. `.next` is the persistence chain for parameters and statements. It is not a key inside `cmpt`. The findings list is the conformance result. It is not ElohaSL.
+
+A rename of `impt`, `grps`, `fncs`, `evts`, `coms`, or `stmt` is a freeze decision when the schema test locks that name. Read `elsl-language` for what the key means before proposing the rename.
+
 ## Procedure
 1. If the catalog does not lock the name, stop. This skill does not apply.
 2. Treat the change as a freeze decision. Do not rename in place and leave the test describing the old name.

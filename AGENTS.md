@@ -63,8 +63,9 @@ Use the installed Tiferet skills. If a skill is not installed, read the framewor
 - Then read the component skill for the `compiler/` package you are editing: `assets`, `domain`, `events`, `interfaces`, `mappers`, `utils`, or tests.
 - Repo-local facts — owner, strands, project ids, milestone shapes — are only in [docs/collab/binding.md](docs/collab/binding.md).
 
-Four local skills, `elsl-` prefix, live under `.agents/skills/`. Each carries its own catalog. A guide is for a human reader of a module. It is not the source an agent follows.
+Five local skills, `elsl-` prefix, live under `.agents/skills/`. Each carries its own catalog. A guide is for a human reader of a module. It is not the source an agent follows.
 
+- `elsl-language` — the ElohaSL document `compile` emits. Read this before explaining `cmpt`, `evt_grp`, or an encoded statement.
 - `elsl-pipeline` — a phase, a feature step, a CLI command, or a pipeline-step event.
 - `elsl-conformance` — a conformance event, or the `feature.yml` condition that gates it.
 - `elsl-rule-sets` — a specification on a `*_RULE_SET` constant.
@@ -88,6 +89,7 @@ Guides correspond to a package, a module, or a test. They are not the agent cata
 - [docs/guides/cli.md](docs/guides/cli.md) — `compiler/cli.py` and `compiler/assets/cli.yml`
 - [docs/guides/assets.md](docs/guides/assets.md) — `compiler/assets/`
 - [docs/guides/events/typecheck.md](docs/guides/events/typecheck.md) — `compiler/events/typecheck.py`
+- [docs/guides/utils/codegen.md](docs/guides/utils/codegen.md) — `compiler/utils/codegen.py`
 - [docs/guides/utils/typecheck.md](docs/guides/utils/typecheck.md) — `compiler/utils/typecheck.py`
 - [docs/guides/tests/schema-freeze.md](docs/guides/tests/schema-freeze.md) — `compiler/tests/test_schema_freeze.py`
 

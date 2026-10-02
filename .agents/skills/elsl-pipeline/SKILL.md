@@ -90,6 +90,12 @@ Catalogue services are `tiferet-ly`, not compiler classes:
 
 `PerformLexicalAnalysis` does not open `tokens.yml` or `grammars.yml`. `PerformSyntacticAnalysis` does not open grammar, token, or production YAML. `TiferetParser` hosts no `p_*` productions.
 
+## Relation to ElohaSL
+
+`compile.module` and `compile.ast` are the commands that emit the language. Scan, parse, and semantic do not. The component flag becomes `cmpt.kind`. It is not a command name.
+
+`GenerateCode` is the step that asks `TiferetGenerator` for the envelope. `OptimizeCode` may share repeated structures at `O1`. It does not rename keys. Read `elsl-language` before changing what those steps emit. This skill owns the wiring, not the document shape.
+
 ## Procedure
 1. Use the catalog above. Then open the YAML you are editing and match it.
 2. Change the feature step, the registered class, and the event together. A shared anchor is one edit.

@@ -105,6 +105,18 @@ A later dialect adds a constant list, not a `ConformanceChecker` subclass. New s
 
 Unless a row says otherwise, `applies_to` is `artifact_header`.
 
+## Relation to ElohaSL
+
+A specification judges a source construct. It does not emit a group. The constructs line up with the envelope as follows:
+
+- `ImportGroupSpecification` and `AppImportSpecification` judge the import group that becomes `impt` rows `{src, tgts}`.
+- `SectionClassNameSpecification` and `FunctionSectionNameSpecification` judge the header whose PascalCase or snake_case name becomes a class, function, or event key.
+- `AttributeMemberSpecification` and `MethodMemberSpecification` judge the members that become `attributes` and `methods`.
+- `AssignmentTypeSpecification` and the binary-op specifications judge the operations that `encode` later writes into `stmt`, such as `Add` and `Assign`.
+- A dialect `PermittedGroupSpecification` judges which `# ***` groups that component may contain. Those names are the generator's group hooks, plus `events` for an unknown name. `exports` is a legal source group and is skipped at emission.
+
+Do not add an envelope key to make a rule pass. Change the source, or change the specification. The emission catalog is `elsl-language`.
+
 ## Procedure
 1. Edit the constant in `compiler/utils/typecheck.py`. Do not copy the list into the event.
 2. If the specification class does not exist, add it in `compiler/utils/core.py`. A specification records findings. It does not mutate the candidate.

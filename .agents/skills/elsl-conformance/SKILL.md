@@ -85,6 +85,12 @@ class CheckEventConformance(ConformanceEvent):
 
 `run_rule_set` rebuilds scopes from the dumped symbol table, constructs one `ConformanceChecker`, and returns `(findings or []) + new_findings`. It does not mutate the caller's list.
 
+## Relation to ElohaSL
+
+A conformance event does not write `cmpt`. Its output is the findings list. The gate selects which source shapes are checked before distillation.
+
+What the check protects is the source that later becomes the envelope: an import group becomes `impt`, a section becomes a group entry or an event, a member becomes `attributes`, `injections`, `execute`, or `methods`. The finding stays a dict with `error_code` and `message`. It is not an ElohaSL key. The document shape is `elsl-language`.
+
 ## Procedure
 1. Bind one `*_RULE_SET` on a `ConformanceEvent`. Do not walk the AST in the event. Do not read `component` in `execute`.
 2. Register `service_id` in `compiler/assets/config.yml` to that class. Do not guess the class from the step name.
