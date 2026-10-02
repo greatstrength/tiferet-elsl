@@ -23,6 +23,30 @@ This module is the conformance event family. One base event binds a rule set. Ea
 
 The contexts class is `CheckContextsConformance`. Its `service_id` is `check_context_conformance_event`. That mismatch is the shipped name.
 
+## Construct
+
+The event does not contain the source it checks. The source is the file the caller named, and the gate decides whether this event runs.
+
+```python
+# *** events
+
+# ** event: get_feature
+class GetFeature:
+    # * method: execute
+    def execute(self, id: str) -> Feature:
+        # Load the feature.
+        return feature
+```
+
+```yaml
+- name: Check Event Conformance
+  service_id: check_event_conformance_event
+  data_key: findings
+  condition: "$r.component == 'events'"
+```
+
+`execute` on the conformance event does not read `component`. A finding is `{error_code, message, ...}`. It is not a key on the compiled document. The passing `get_feature` section is what codegen later emits.
+
 ## Boundaries
 
 **Inside this domain:** which event binds which rule-set constant, and the refusal to read `component`.

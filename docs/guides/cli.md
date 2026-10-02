@@ -70,6 +70,27 @@ tiferet-compiler compile ast ping.json -c events -o ping.yml
 
 Boolean flags are presence flags. `--include-tokens true` is not the form.
 
+## Construct
+
+The command is the construct a person types. The file it reads is a marked Python module.
+
+```bash
+tiferet-compiler compile module app/events/feature.py -c events
+```
+
+```python
+# *** events
+
+# ** event: get_feature
+class GetFeature:
+    # * method: execute
+    def execute(self):
+        # Load the feature.
+        return feature
+```
+
+`-c events` is required. It selects the dialect gate and becomes `cmpt.kind`. It does not change the command name. Scan and parse accept the same file and stop before the envelope.
+
 ## Boundaries
 
 **Inside this domain:** how a person invokes `tiferet-compiler`, and which arguments each command accepts.

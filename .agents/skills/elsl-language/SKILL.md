@@ -1,113 +1,209 @@
 ---
 name: elsl-language
 description: >
-  Use when reading, explaining, or changing ElohaSL output. Phrases: "ElohaSL",
-  "ElSL", "cmpt", "evt_grp", "what does compile emit", "codegen envelope",
-  "named operation", "snippet". Not for wiring a pipeline step or editing a
-  conformance rule unless the question is what the distilled document means.
+  Use when reading, explaining, or changing an ElohaSL construct. Phrases:
+  "ElohaSL", "ElSL", "what does this marker emit", "event section", "snippet",
+  "cmpt", "evt_grp", "named operation". Not for wiring a pipeline step unless
+  the question is what the construct becomes.
 ---
 
-# Read ElohaSL from codegen
+# Read an ElohaSL construct
 
 ## When to use
-- Explaining what `compile.module` or `compile.ast` emits.
-- Reading a `cmpt` or `evt_grp` document.
-- Changing a generator key, a snippet, or an encoded statement.
+- Explaining what a source marker, member, or statement becomes in the compiled document.
+- Changing the generator for one of those constructs.
 
 ## When not to use
-- Wiring a phase or a CLI flag — `elsl-pipeline`.
-- Adding a specification or a gate — `elsl-rule-sets` and `elsl-conformance`. Those check source. They do not appear in the envelope.
+- Wiring a phase — `elsl-pipeline`.
+- Adding a specification — `elsl-rule-sets`. A rule judges the source construct. It does not appear in the document.
 - Renaming a frozen key — `elsl-schema`.
 
 ## Canonical source
-- `compiler/utils/codegen.py` — `TiferetGenerator.generate`
-- `compiler/mappers/codegen.py` — import, snippet, and event serialization
-- `compiler/domain/ast.py` — `Expression.encode` and `Statement.encode`
+- `compiler/utils/tests/test_codegen.py` — the pairs below are taken from those locks.
+- `compiler/utils/codegen.py` — `TiferetGenerator.generate`.
+- `compiler/domain/ast.py` — `encode`.
 
 ## Inputs
-- A compiled document, or the construct being explained.
+- The source construct, or the emitted key being read.
 - `docs/collab/binding.md` when the work will edit the generator.
 
-## The document
+## How to read a construct
 
-ElohaSL, in this compiler's output, is the component envelope. It is not the source file and not the findings list.
+ElohaSL here is the compiled document, not the Python source. A construct is a source marker plus the keys it emits. A missing key means the construct was absent or empty. It does not mean an empty list.
 
-`generate` always returns `cmpt`. `kind='events'` also returns `evt_grp`. Other kinds omit `evt_grp`. `cmpt` never contains `evt_grp`.
+`compile` with `-c events` emits `cmpt` and `evt_grp`. Any other `-c` emits `cmpt` only. `cmpt` never contains `evt_grp`.
 
-`cmpt` keys, only when built:
+## Module
 
-- `name` — module name, or `unknown`
-- `kind` — the requested component type. A direct `generate` call defaults to `events`. The CLI passes `-c`.
-- `desc` — stripped module docstring. Omitted when empty.
-- `impt` — import categories. Each row is `{src, tgts}`. Same-module imports collapse. First-seen module order is kept.
-- `grps` — ordered group entries. `exports` is skipped. An unknown group name dispatches as events.
+```python
+"""Feature events."""
+```
 
-`evt_grp` repeats `name`, `desc`, and `impt`, then adds `fncs` and `evts` when those maps were built. Functions and events are dual-emitted only on that legacy key. They are not copied onto `cmpt` except as group entries inside `grps`.
+emits `cmpt.desc` and, for events, `evt_grp.desc`, both `Feature events.` The quotes are stripped. No docstring means `desc` is absent.
 
-Short names are the language. These long replacements are absent: `imports`, `functions`, `events`, `component`, `event_group`.
+An empty module is still `{'name': 'feature', 'kind': 'events'}`. `kind` is the requested component, not something discovered from the file.
 
-## Groups
+## Import group
 
-Known group hooks: `imports`, `functions`, `constants`, `classes`, `models`, `mappers`, `interfaces`, `utils`, `contexts`, `blueprints`, `repos`. Anything else, including `events`, uses the event rewrite.
+```python
+# *** imports
 
-| Source group | Envelope |
-|---|---|
-| `imports` | `cmpt.impt` only. No group entry |
-| `functions` | group `functions` with `fncs`, and `evt_grp.fncs` when kind is events |
-| `blueprints` | group `blueprints` with the same callable shape as functions |
-| `constants` | group `constants` with `csts`. Not dual-emitted at the root |
-| `classes` | group of class payloads. A base is recorded. An absent base is omitted |
-| `models` | class shape only. No `base`, `maps`, `kind`, or `implements` |
-| `mappers` | `maps` from the first base, `kind` from the second base name |
-| `interfaces` | same base rule as classes |
-| `contexts` | `base`, plus `collaborators` when an init parameter type is a sibling import |
-| `repos` | `implements` from the first base. `idempotent` only when delete raises nothing |
-| `events` | group of event payloads, and `evt_grp.evts` when kind is events |
+# ** core
+from typing import Any, Dict
 
-A group entry is `{name}` plus `qual` when the header has a parenthetical qualifier. Empty containers are omitted.
+# ** app
+from ..domain import Feature
+```
+
+emits `cmpt.impt`, not a group entry:
+
+```yaml
+core:
+  - {src: typing, tgts: [Any, Dict]}
+app:
+  - {src: ..domain, tgts: [Feature]}
+```
+
+Two symbols from one module collapse into one row. First-seen module order is kept. The categories are the section names `core`, `infra`, and `app`.
+
+## Event section
+
+```python
+# *** events
+
+# ** event: get_feature
+class GetFeature:
+    '''Retrieve a feature by identifier.'''
+```
+
+The section name is the key. The class name is the payload name.
+
+```yaml
+evt_grp:
+  evts:
+    get_feature:
+      name: GetFeature
+      desc: Retrieve a feature by identifier.
+```
+
+`cmpt.grps` also gets an events group. A class with no base has no `base` key. Do not invent one.
+
+`# *** exports` is skipped. It is not emitted as an event group.
 
 ## Members
 
-A class or event payload includes `name`, then only the filled sections: `desc`, `attributes`, `injections`, `execute`, `methods`.
+```python
+# * attribute: feature_id
+feature_id: str = 'missing'
 
-- Attribute without an initializer: `{name: type_name}`.
-- Attribute with an initializer: `{name: {type, init}}`. `init` is `Expression.encode()`.
-- Injection spec: `name:type:required::desc`. The default slot is empty. The value is `{assign: [{target, value}]}`, and the value is the parameter name.
-- `execute` has no description key. Optional sections are `deco`, `params`, `returns`, `snpt`.
-- A method whose inner name is `execute` is the execute payload. Other methods go in `methods`, keyed by name.
-- Parameter spec: `name:type:required:default:desc`. `self` is skipped.
-- Return spec: `type:desc`, or `type:` when the docstring has no return description.
+# * init
+def __init__(self, feature_service: FeatureService):
+    '''
+    :param feature_service: The feature service.
+    '''
 
-## Snippets and named operations
+# * method: execute
+def execute(self, id: str) -> Feature:
+    '''
+    :param id: The feature id.
+    :return: The feature.
+    '''
 
-A snippet is one logical step. Serialization renames the domain fields: comments become `coms`, encoded statements become `stmt`. An empty snippet is omitted.
-
-Statements inside `stmt` are `Statement.encode()`, not source text. Expressions inside those strings are `Expression.encode()`.
-
-```text
-Return(Add(a, b))
-Attr(self, name)
-Call(verify, expression=feature is not None)
-If(cond, body)
+    # Load the feature.
+    return feature
 ```
 
-`encode` returns `''` when a kind has no encoding. Comments, artifact headers, and imports do not encode as statements. F-strings do not encode.
+emits, on that event payload:
 
-## Conformance is not the document
+```yaml
+attributes:
+  - feature_id: {type: str, init: missing}
+injections:
+  - feature_service:FeatureService:true::The feature service.:
+      assign: [{target: feature_service, value: feature_service}]
+execute:
+  params: ['id:str:true::The feature id.']
+  returns: ['Feature:The feature.']
+  snpt:
+    - coms: ['Load the feature.']
+      stmt: ['Return(feature)']
+```
 
-Conformance findings are a separate list. A finding does not become a key on `cmpt`. The gate that chose the dialect is also absent. What conformance checks is the source shape this language later records: import groups, section names, members, and the encoded operations inside snippets.
+`execute` has no `desc`, even when the method docstring has a summary. `self` is not a parameter. A method whose inner name is not `execute` goes in `methods`, keyed by that name.
 
-If a finding and an envelope disagree, the envelope is what distillation emitted. The finding is what the rulebook rejected. Do not merge them.
+Parameter spec is `name:type:required:default:desc`. An injection spec leaves the default slot empty: `name:type:required::desc`.
+
+## Function and blueprint
+
+```python
+# *** functions
+
+# ** function: build_app
+def build_app(name: str) -> App:
+    '''Build the application.'''
+```
+
+emits `cmpt.grps[].fncs.build_app`, and `evt_grp.fncs.build_app` when kind is events. It does not appear under `evts`.
+
+A blueprint uses the same callable shape. Only the group name changes:
+
+```python
+# *** blueprints
+
+# ** blueprint: build_app
+def build_app(name: str) -> App:
+    ...
+```
+
+emits `grps[].name == blueprints` and `fncs.build_app.params == ['name:str:true::']`, `returns == ['App:']`.
+
+## Constant
+
+```python
+# *** constants
+
+# ** constant: feature_not_found_id (ids)
+FEATURE_NOT_FOUND_ID = 'FEATURE_NOT_FOUND'
+```
+
+emits a constants group. The key is the assignment target, not the section name.
+
+```yaml
+grps:
+  - name: constants
+    qual: ids
+    csts:
+      FEATURE_NOT_FOUND_ID: {value: FEATURE_NOT_FOUND}
+```
+
+Constants are not copied to the envelope root.
+
+## Named operation
+
+A snippet comment becomes `coms`. The statement becomes `stmt` through `encode`, not through a pretty-printer.
+
+| Source | `stmt` |
+|---|---|
+| `return feature` | `Return(feature)` |
+| `return a + b` | `Return(Add(a, b))` |
+| `self.name` | `Attr(self, name)` |
+| `verify(...)` | `Call(verify, ...)` |
+
+`encode` returns an empty string when a kind has no encoding. Comments, artifact headers, imports, and f-strings do not become statements.
+
+## Conformance
+
+A finding is not a construct in this document. `# *** imports` may fail `INVALID_IMPORT_GROUP` and still be the construct that, when it passes, becomes `impt`. Do not put the error code on `cmpt`.
 
 ## Procedure
-1. Read `cmpt` first. Read `evt_grp` only when `kind` is `events`.
-2. Treat a missing key as omitted, not as an empty list.
-3. Decode `stmt` with the encode names above. Do not pretty-print it back to Python and call that the language.
-4. **Trunk** — a key rename is `elsl-schema` before it is a generator edit.
+1. Name the source construct first: group, section, member, or statement.
+2. Read the emitted keys for that construct above. Then confirm against `compiler/utils/tests/test_codegen.py` if the edit touches the generator.
+3. Treat a missing key as omitted.
+4. **Trunk** — renaming an emitted key is `elsl-schema` before it is a generator edit.
 5. **Prototype** — only if binding.md says that strand is active.
 
 ## Outputs
-- An explanation of the document, or a generator change on the strand branch, in a PR. Not an issue body.
+- An explanation of one construct, or a generator change on the strand branch, in a PR. Not an issue body.
 
 ## Guardrails
 - Never commit or merge unless asked.
@@ -116,5 +212,5 @@ If a finding and an envelope disagree, the envelope is what distillation emitted
 - Never author a reconstruction TRD without a freeze id.
 - Read `docs/collab/binding.md` in this repo for owner/repo, proto branch, and project ids.
 - Do not vendor Tiferet skills into this repo.
-- Do not invent a long key for a short one.
-- Do not treat a guide as the source for this catalog.
+- Do not describe a construct by its envelope key alone. Show the source marker that produces it.
+- Do not treat a guide as the source for these pairs.

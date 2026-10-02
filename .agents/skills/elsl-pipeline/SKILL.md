@@ -92,7 +92,13 @@ Catalogue services are `tiferet-ly`, not compiler classes:
 
 ## Relation to ElohaSL
 
-`compile.module` and `compile.ast` are the commands that emit the language. Scan, parse, and semantic do not. The component flag becomes `cmpt.kind`. It is not a command name.
+Only the compile commands emit the language. The component flag selects the kind, and it selects which dialect gate runs. It is not a command name.
+
+```bash
+tiferet-compiler compile module app/events/feature.py -c events
+```
+
+reads a file whose markers are `# *** events` and `# ** event: get_feature`, then asks `GenerateCode` for the envelope. `cmpt.kind` is `events`. `evt_grp.evts.get_feature` is the event section. Scan and parse stop before that document exists.
 
 `GenerateCode` is the step that asks `TiferetGenerator` for the envelope. `OptimizeCode` may share repeated structures at `O1`. It does not rename keys. Read `elsl-language` before changing what those steps emit. This skill owns the wiring, not the document shape.
 

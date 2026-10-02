@@ -107,13 +107,34 @@ Unless a row says otherwise, `applies_to` is `artifact_header`.
 
 ## Relation to ElohaSL
 
-A specification judges a source construct. It does not emit a group. The constructs line up with the envelope as follows:
+A specification judges a source construct. Show the marker, not only the class name. It does not emit a group.
 
-- `ImportGroupSpecification` and `AppImportSpecification` judge the import group that becomes `impt` rows `{src, tgts}`.
-- `SectionClassNameSpecification` and `FunctionSectionNameSpecification` judge the header whose PascalCase or snake_case name becomes a class, function, or event key.
-- `AttributeMemberSpecification` and `MethodMemberSpecification` judge the members that become `attributes` and `methods`.
-- `AssignmentTypeSpecification` and the binary-op specifications judge the operations that `encode` later writes into `stmt`, such as `Add` and `Assign`.
-- A dialect `PermittedGroupSpecification` judges which `# ***` groups that component may contain. Those names are the generator's group hooks, plus `events` for an unknown name. `exports` is a legal source group and is skipped at emission.
+```python
+# *** imports
+
+# ** core
+from typing import Any
+
+# ** app
+from ..domain import Feature
+```
+
+`ImportGroupSpecification` accepts `core`, `infra`, and `app`. `AppImportSpecification` accepts or rejects `..domain` according to the dialect's `allowed_components`. When the group passes, `elsl-language` records it as `impt` rows `{src, tgts}`.
+
+```python
+# ** event: get_feature
+class GetFeature:
+    ...
+
+    # * method: execute
+    def execute(self, id: str) -> Feature:
+        # Load the feature.
+        return feature
+```
+
+`SectionClassNameSpecification` requires `GetFeature` for `get_feature`. `MethodMemberSpecification` requires the member to be a function. The passing method becomes `execute.snpt` with `stmt: ['Return(feature)']`.
+
+A dialect `PermittedGroupSpecification` judges which `# ***` groups that component may contain. Those names are the generator's group hooks, plus `events` for an unknown name. `exports` is a legal source group and is skipped at emission.
 
 Do not add an envelope key to make a rule pass. Change the source, or change the specification. The emission catalog is `elsl-language`.
 

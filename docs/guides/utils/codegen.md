@@ -24,6 +24,35 @@ Import rows are `{src, tgts}`. Constants stay on their group. Functions and even
 
 Conformance findings are not part of this document. A finding says the source failed a rule. The envelope says what distillation recorded.
 
+## Construct
+
+A construct is the source marker plus the keys it emits. This method:
+
+```python
+# * method: execute
+def execute(self, id: str) -> Feature:
+    '''
+    :param id: The feature id.
+    :return: The feature.
+    '''
+
+    # Load the feature.
+    return feature
+```
+
+becomes:
+
+```yaml
+execute:
+  params: ['id:str:true::The feature id.']
+  returns: ['Feature:The feature.']
+  snpt:
+    - coms: ['Load the feature.']
+      stmt: ['Return(feature)']
+```
+
+`execute` has no `desc`. `self` is not a parameter. An empty section is omitted.
+
 ## Boundaries
 
 **Inside this domain:** the envelope keys, the group entries, and the encoded statements inside snippets.

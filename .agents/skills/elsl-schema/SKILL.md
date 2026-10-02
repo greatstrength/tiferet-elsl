@@ -59,7 +59,18 @@ Findings: every `service_id` that starts with `check_` and ends with `_conforman
 
 ## Relation to ElohaSL
 
-The frozen output names are the language's public keys, not internal generator locals. `cmpt` is the component envelope. `evt_grp` is the legacy event-group document, and only for events. `.next` is the persistence chain for parameters and statements. It is not a key inside `cmpt`. The findings list is the conformance result. It is not ElohaSL.
+A frozen name is a construct's emitted key, not a local variable. This source:
+
+```python
+# ** event: get_feature
+class GetFeature:
+    # * method: execute
+    def execute(self):
+        # Load the feature.
+        return feature
+```
+
+compiled with `-c events` must keep `cmpt` and `evt_grp` as siblings, `evt_grp.evts.get_feature`, and `snpt` entries that use `coms` and `stmt`. `.next` is the persistence chain for parameters and statements. It is not a key inside `cmpt`. The findings list is the conformance result. It is not ElohaSL.
 
 A rename of `impt`, `grps`, `fncs`, `evts`, `coms`, or `stmt` is a freeze decision when the schema test locks that name. Read `elsl-language` for what the key means before proposing the rename.
 

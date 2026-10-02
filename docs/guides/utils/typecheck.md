@@ -23,6 +23,36 @@ The constants name the specifications, their ids, and the arguments those specif
 
 Specification classes stay in `compiler/utils/core.py`. This module imports them and lists them.
 
+## Construct
+
+A rule set is a list of specifications. Each specification names the source construct it judges.
+
+```python
+# *** imports
+
+# ** core
+from typing import Any
+
+# ** app
+from ..domain import Feature
+```
+
+`ImportGroupSpecification` accepts `core`, `infra`, and `app`. A dialect `AppImportSpecification` accepts or rejects `from ..domain import Feature` according to that dialect's allowed components.
+
+```python
+# ** event: get_feature
+class Widget:
+    ...
+```
+
+`SectionClassNameSpecification` rejects this. The header `get_feature` requires the class `GetFeature`.
+
+```python
+return a + b
+```
+
+`ReturnBinaryOpTypeSpecification` judges that statement. When it passes, codegen encodes it as `Return(Add(a, b))`.
+
 ## Boundaries
 
 **Inside this domain:** the eleven constants and `ConformanceChecker`.

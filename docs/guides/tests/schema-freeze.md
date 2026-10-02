@@ -21,6 +21,21 @@ It locks the package version, the distribution name, the five commands, the ten 
 
 It does not lock rule-set contents, specification ids, feature step order, or service class names. Those live in the modules that own them.
 
+## Construct
+
+The lock is on the keys a construct emits, not on the prose around them.
+
+```python
+# ** event: get_feature
+class GetFeature:
+    # * method: execute
+    def execute(self):
+        # Load the feature.
+        return feature
+```
+
+compiled with `-c events` must keep `cmpt` and `evt_grp` as siblings, the event under `evt_grp.evts`, and the snippet keys `coms` and `stmt`. Renaming any of those is a freeze decision.
+
 ## Boundaries
 
 **Inside this domain:** the assertions in `compiler/tests/test_schema_freeze.py`.

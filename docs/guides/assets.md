@@ -26,6 +26,28 @@ Scan and parse do not take a component type. Semantic and both compile commands 
 
 Catalogue repositories are `tiferet-ly` classes. The lexer and parser adapters are `compiler.utils`. The events do not open the YAML files. The repositories do.
 
+## Construct
+
+A phase is a YAML feature, not a Python class. This step is the construct that turns a parsed events file into ElohaSL:
+
+```yaml
+- name: Generate Code
+  service_id: generate_code_event
+  data_key: codegen
+  params:
+    codegen_service: codegen_service
+```
+
+The registration that owns it is:
+
+```yaml
+generate_code_event:
+  module_path: compiler.events.codegen
+  class_name: GenerateCode
+```
+
+The source it consumes still has markers such as `# *** events` and `# ** event: get_feature`. The component type arrives as request data. It is not part of the step name.
+
 ## Boundaries
 
 **Inside this domain:** the packaged YAML, the session ids, and the service registrations.
