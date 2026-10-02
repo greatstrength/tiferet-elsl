@@ -45,10 +45,12 @@ def test_version_is_1_0_0():
     # The version is the package attribute, not a second project file.
     assert compiler.__version__ == '1.0.0'
 
-    # Retired distribution names stay off the frozen surface.
+    # The distribution name is tiferet-elsl. Retired names stay off the surface.
     repo_root = Path(__file__).resolve().parents[2]
     assert not (repo_root / 'compiler' / 'pyproject.toml').exists()
     project = (repo_root / 'pyproject.toml').read_text(encoding='utf-8')
+    assert 'name = "tiferet-elsl"' in project
+    assert 'name = "tiferet-compiler"' not in project
     assert 'tiferet-command-parser-edu' not in project
 
 # ** test: cli_command_surface
