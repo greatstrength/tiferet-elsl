@@ -369,6 +369,21 @@ class ParamList(DomainObject):
         description='Default value expression when the parameter is optional.',
     )
 
+    # * method: describe
+    def describe(self) -> str:
+        '''
+        Describe this parameter as one diagnostic line.
+
+        :return: The parameter line, tagged ``[Param]``.
+        :rtype: str
+        '''
+
+        # Requiredness is a suffix on this parameter, not a walk of its type.
+        required = ' required' if self.required else ' optional'
+
+        # Return the parameter line. The tag is Param, not ParamList.
+        return f'[Param] name={self.name}{required}'
+
 # ** model: type
 class Type(DomainObject):
     '''
@@ -537,6 +552,21 @@ class Type(DomainObject):
 
         # Return the enum value for every other kind.
         return self.kind.value
+
+    # * method: describe
+    def describe(self) -> str:
+        '''
+        Describe this type as one diagnostic line.
+
+        :return: The type line, with a name suffix when the name is set.
+        :rtype: str
+        '''
+
+        # Append the name only when it is set. An unset class name is not unknown.
+        name = f' name={self.name}' if self.name else ''
+
+        # Return this type's line without walking nested types.
+        return f'[Type] kind={self.kind.value}{name}'
 
 # ** model: expression
 class Expression(DomainObject):
@@ -881,6 +911,22 @@ class Expression(DomainObject):
         # F-strings, imports, artifacts, and unknown kinds do not encode.
         return ''
 
+    # * method: describe
+    def describe(self) -> str:
+        '''
+        Describe this expression as one diagnostic line.
+
+        :return: The expression line, with optional name and value suffixes.
+        :rtype: str
+        '''
+
+        # Name precedes value. Omit an unset or empty suffix.
+        name = f' name={self.name}' if self.name else ''
+        value = f' value={self.value}' if self.value else ''
+
+        # Return this expression's line, not a child line.
+        return f'[Expression] kind={self.kind.value}{name}{value}'
+
 # ** model: declaration
 class Declaration(DomainObject):
     '''
@@ -1131,6 +1177,29 @@ class Declaration(DomainObject):
         # Join parameter names and return the definition encoding.
         joined = ', '.join(param_names)
         return f'Def({self.name}, [{joined}])'
+
+    # * method: describe
+    def describe(self) -> str:
+        '''
+        Describe this declaration as one diagnostic line.
+
+        :return: The declaration line, with optional type and docstring suffixes.
+        :rtype: str
+        '''
+
+        # Append the type kind when this declaration has a type.
+        type_str = f' : {self.type.kind.value}' if self.type is not None else ''
+
+        # Quote a truthy docstring, and cut it only after 40 characters.
+        doc_str = ''
+        if self.doc_string:
+            text = self.doc_string
+            if len(text) > 40:
+                text = text[:40] + '...'
+            doc_str = f' doc="{text}"'
+
+        # Return this declaration's line without its body or initializer.
+        return f'[Declaration] name={self.name}{type_str}{doc_str}'
 
 # ** model: statement
 class Statement(DomainObject):
@@ -1556,6 +1625,18 @@ class Statement(DomainObject):
 
         # Comments, snippets, artifacts, imports, print, and block do not encode.
         return ''
+
+    # * method: describe
+    def describe(self) -> str:
+        '''
+        Describe this statement as one diagnostic line.
+
+        :return: The statement line, with no other suffix.
+        :rtype: str
+        '''
+
+        # Return the kind token. Do not walk bodies or nested nodes.
+        return f'[Statement] kind={self.kind.value}'
 
 # Resolve forward references once every AST model exists.
 Type.model_rebuild()
