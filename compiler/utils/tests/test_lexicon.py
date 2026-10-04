@@ -2,19 +2,12 @@
 
 # *** imports
 
-# ** core
-from pathlib import Path
-
-# ** infra
-import yaml
-
 # ** app
 from compiler.assets import lexer as a
+from compiler.assets.grammar import COMPILER_DEFAULT_GRAMMARS
+from compiler.assets.token import COMPILER_DEFAULT_TOKENS
 
 # *** constants
-
-# ** constant: assets_dir
-_ASSETS_DIR = Path(__file__).resolve().parents[2] / 'assets'
 
 # ** constant: complex_names
 _COMPLEX_NAMES = (
@@ -189,36 +182,28 @@ _ORDERED_NAMES = (
 # *** functions
 
 # ** function: load_tokens
-def load_tokens() -> list:
+def load_tokens() -> dict:
     '''
     Load the declared token catalogue.
 
-    :return: The tokens list.
-    :rtype: list
+    :return: The token group dict.
+    :rtype: dict
     '''
 
-    # Read the token catalogue with a safe YAML loader.
-    with (_ASSETS_DIR / 'tokens.yml').open(encoding='utf-8') as handle:
-        document = yaml.safe_load(handle)
-
-    # Return the tokens list.
-    return document['tokens']
+    # The group dict is the catalogue. Do not wrap a document key.
+    return COMPILER_DEFAULT_TOKENS
 
 # ** function: load_grammars
 def load_grammars() -> dict:
     '''
     Load the declared grammar catalogue.
 
-    :return: The grammars mapping.
+    :return: The grammar group dict.
     :rtype: dict
     '''
 
-    # Read the grammar catalogue with a safe YAML loader.
-    with (_ASSETS_DIR / 'grammars.yml').open(encoding='utf-8') as handle:
-        document = yaml.safe_load(handle)
-
-    # Return the grammars mapping.
-    return document['grammars']
+    # The group dict is the catalogue. Do not wrap a document key.
+    return COMPILER_DEFAULT_GRAMMARS
 
 # ** function: expand_tokens
 def expand_tokens() -> list:
@@ -229,8 +214,8 @@ def expand_tokens() -> list:
     :rtype: list
     '''
 
-    # Expand each single-key token map.
-    return [next(iter(item.items())) for item in load_tokens()]
+    # Declared order is the group-dict insertion order.
+    return list(load_tokens().items())
 
 # *** tests
 

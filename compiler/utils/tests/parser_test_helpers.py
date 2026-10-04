@@ -5,7 +5,15 @@
 # ** core
 from typing import Any, List, Optional
 
+# ** infra
+from tiferet_ly.mappers.grammar import GrammarConfigObject
+from tiferet_ly.mappers.production import ProductionRuleConfigObject
+from tiferet_ly.mappers.token import TokenRuleConfigObject
+
 # ** app
+from ...assets.grammar import COMPILER_DEFAULT_GRAMMARS
+from ...assets.production import COMPILER_DEFAULT_PRODUCTIONS
+from ...assets.token import COMPILER_DEFAULT_TOKENS
 from ...mappers import Tok
 
 # *** functions
@@ -379,3 +387,57 @@ def make_functions_module(function_sections: List[List[Any]]) -> List[Any]:
     for section in function_sections:
         tokens.extend(section)
     return tokens
+
+# ** function: load_token_rules
+def load_token_rules() -> List[Any]:
+    '''
+    Map the token catalog to aggregates in declared order.
+
+    :return: The token-rule aggregates.
+    :rtype: List[Any]
+    '''
+
+    # Reinject each key as name. The catalog value omits it.
+    return [
+        TokenRuleConfigObject.model_validate({
+            **body,
+            'name': name,
+        }).map()
+        for name, body in COMPILER_DEFAULT_TOKENS.items()
+    ]
+
+# ** function: load_grammar_rules
+def load_grammar_rules() -> List[Any]:
+    '''
+    Map the grammar catalog to aggregates in declared order.
+
+    :return: The grammar aggregates.
+    :rtype: List[Any]
+    '''
+
+    # Reinject each key as id. The catalog value omits it.
+    return [
+        GrammarConfigObject.model_validate({
+            **body,
+            'id': grammar_id,
+        }).map()
+        for grammar_id, body in COMPILER_DEFAULT_GRAMMARS.items()
+    ]
+
+# ** function: load_production_rules
+def load_production_rules() -> List[Any]:
+    '''
+    Map the production catalog to aggregates in declared order.
+
+    :return: The production-rule aggregates.
+    :rtype: List[Any]
+    '''
+
+    # Reinject each key as name. The catalog value omits it.
+    return [
+        ProductionRuleConfigObject.model_validate({
+            **body,
+            'name': name,
+        }).map()
+        for name, body in COMPILER_DEFAULT_PRODUCTIONS.items()
+    ]

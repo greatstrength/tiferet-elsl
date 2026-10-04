@@ -146,16 +146,12 @@ def test_session_and_asset_files():
         'production_config',
     }
 
-    # The seven YAML basenames are package data, not loose repo files only.
+    # The three remaining YAML basenames are package data, not loose repo files only.
     packaged = files('compiler').joinpath('assets')
     for name in (
         'config.yml',
         'feature.yml',
-        'errors.yml',
         'cli.yml',
-        'tokens.yml',
-        'grammars.yml',
-        'productions.yml',
     ):
         assert packaged.joinpath(name).is_file()
 
