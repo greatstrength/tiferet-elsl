@@ -49,3 +49,16 @@ from ..domain.semantic import (
     SYMBOL_KIND_PARAMETER,
     SYMBOL_KIND_VARIABLE,
 )
+from ..domain.provision import (
+    PROVISION_KIND_PRODUCTION,
+    PROVISION_KIND_REWRITE,
+    PROVISION_KIND_SPECIFICATION,
+    AllOf,
+    AnyOf,
+    Not,
+    Production,
+    Provision,
+    ProvisionRegistration,
+    Rewrite,
+    Specification,
+)

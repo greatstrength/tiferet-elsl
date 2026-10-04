@@ -16,6 +16,7 @@ from ..mappers import (
     Expression,
     ExpressionAggregate,
     ParamList,
+    Production,
     ScopeAggregate,
     Statement,
 )
@@ -25,7 +26,6 @@ from ..mappers.semantic import (
     Symbol,
 )
 from .core import (
-    Production,
     ProductionContext,
     StatementWalker,
 )
@@ -440,8 +440,8 @@ class SymbolTableBuilder(StatementWalker):
             productions if productions is not None else BUILDER_PRODUCTION_SET
         )
 
-        # The attachment list is the production list. The walk starts empty.
-        super().__init__(scopes={}, attachments=self.productions)
+        # The provision list is the production list. The walk starts empty.
+        super().__init__(scopes={}, provisions=self.productions)
 
     # * method: build
     def build(self, module_decl: Declaration) -> dict:
@@ -533,7 +533,7 @@ class SymbolTableBuilder(StatementWalker):
 
         # Copy the stack so a production cannot reorder the walk.
         context = ProductionContext(scope_stack=list(self.scope_stack))
-        self.apply_attachments(visit, candidate, context)
+        self.apply_provisions(visit, candidate, context)
 
     # * method: handle_import_from
     def handle_import_from(self, stmt: Statement) -> None:
@@ -731,8 +731,8 @@ class NameResolver(StatementWalker):
             productions if productions is not None else RESOLVER_PRODUCTION_SET
         )
 
-        # The attachment list is the production list. Scopes come from the builder.
-        super().__init__(scopes=scopes, attachments=self.productions)
+        # The provision list is the production list. Scopes come from the builder.
+        super().__init__(scopes=scopes, provisions=self.productions)
         self._accumulator = ResolutionAccumulator()
 
     # * method: resolve
@@ -779,7 +779,7 @@ class NameResolver(StatementWalker):
             scope_stack=list(self.scope_stack),
             accumulator=self._accumulator,
         )
-        self.apply_attachments(visit, candidate, context)
+        self.apply_provisions(visit, candidate, context)
 
     # * method: handle_decl
     def handle_decl(self, stmt: Statement) -> None:

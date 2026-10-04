@@ -8,7 +8,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 # ** app
 from ..interfaces.optimizer import OptimizerService
-from .core import Rewrite, RewriteContext
+from ..mappers import Rewrite
+from .core import RewriteContext
 
 # *** constants
 

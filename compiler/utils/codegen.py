@@ -6,7 +6,7 @@
 from typing import Any, Dict, FrozenSet, List, Optional
 
 # ** app
-from ..mappers import Declaration, Statement, Expression, ParamList
+from ..mappers import Declaration, Statement, Expression, ParamList, Rewrite
 from ..interfaces.codegen import CodegenService
 from ..mappers.ast import ExpressionAggregate
 from ..mappers.codegen import (
@@ -15,7 +15,6 @@ from ..mappers.codegen import (
     SnippetAccumulator,
 )
 from .core import (
-    Rewrite,
     RewriteContext,
     collect_member_decorators,
     get_return_type_name,

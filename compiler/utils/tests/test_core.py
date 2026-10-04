@@ -20,12 +20,9 @@ from compiler.domain.semantic import (
     SYMBOL_KIND_VARIABLE,
     Symbol,
 )
-from compiler.mappers import ScopeAggregate
+from compiler.mappers import AllOf, AnyOf, Not, Production, Rewrite, ScopeAggregate
 from ..core import (
-    AllOf,
-    AnyOf,
     AssignmentTypeSpecification,
-    Attachment,
     AttributeMemberSpecification,
     BinaryOpTypeSpecification,
     ConformanceContext,
@@ -40,12 +37,10 @@ from ..core import (
     InterfaceAbstractMethodSpecification,
     MapperRolesAttributeSpecification,
     MethodMemberSpecification,
-    Not,
-    Production,
     ProductionContext,
+    Provision,
     ReposCrudMethodSpecification,
     ReturnBinaryOpTypeSpecification,
-    Rewrite,
     RewriteContext,
     SectionClassNameSpecification,
     Specification,
@@ -87,24 +82,7 @@ class _AlwaysViolated(Specification):
     '''
 
     # * attribute: code
-    code: str
-
-    # * init
-    def __init__(self, id, applies_to, code='VIOLATED'):
-        '''
-        Store the fixed finding code.
-
-        :param id: The attachment id.
-        :type id: str
-        :param applies_to: The visit hook.
-        :type applies_to: str
-        :param code: The finding code this fixture emits.
-        :type code: str
-        '''
-
-        # Store the identity, then the fixed finding code.
-        super().__init__(id=id, applies_to=applies_to)
-        self.code = code
+    code: str = 'VIOLATED'
 
     # * method: evaluate
     def evaluate(self, candidate, context):
@@ -153,18 +131,18 @@ class _RecordingWalker(StatementWalker):
     '''
 
     # * init
-    def __init__(self, scopes=None, attachments=None):
+    def __init__(self, scopes=None, provisions=None):
         '''
         Start with an empty visit record.
 
         :param scopes: The scope registry.
         :type scopes: dict
-        :param attachments: The attachment list.
-        :type attachments: list
+        :param provisions: The provision list.
+        :type provisions: list
         '''
 
         # Record visits after the base walker is initialized.
-        super().__init__(scopes=scopes, attachments=attachments)
+        super().__init__(scopes=scopes, provisions=provisions)
         self.seen = []
 
     # * method: handle_decl
@@ -205,20 +183,20 @@ class _RecordingWalker(StatementWalker):
 
 # *** tests
 
-# ** test: attachment_requires_id_and_applies_to
-def test_attachment_requires_id_and_applies_to() -> None:
+# ** test: provision_requires_id_and_applies_to
+def test_provision_requires_id_and_applies_to() -> None:
     '''
-    Test that a constructed attachment stores its id and visit hook.
+    Test that a constructed provision stores its id and visit hook.
     '''
 
-    # Construct an attachment with both required values.
-    attachment = Attachment(id='common.import_group', applies_to='artifact_header')
+    # Construct a provision with both required values.
+    provision = Provision(id='common.import_group', applies_to='artifact_header')
 
     # Both values are stored, and the base call is not implemented.
-    assert attachment.id == 'common.import_group'
-    assert attachment.applies_to == 'artifact_header'
+    assert provision.id == 'common.import_group'
+    assert provision.applies_to == 'artifact_header'
     with pytest.raises(NotImplementedError):
-        attachment(None, None)
+        provision(None, None)
 
 # ** test: attaches_to_matches_hook
 def test_attaches_to_matches_hook() -> None:
@@ -226,10 +204,10 @@ def test_attaches_to_matches_hook() -> None:
     Test that attaches_to is true only for the stored hook.
     '''
 
-    # An expression attachment matches only that hook.
-    attachment = Attachment(id='rule', applies_to='expression')
-    assert attachment.attaches_to('expression') is True
-    assert attachment.attaches_to('return') is False
+    # An expression provision matches only that hook.
+    provision = Provision(id='rule', applies_to='expression')
+    assert provision.attaches_to('expression') is True
+    assert provision.attaches_to('return') is False
 
 # ** test: specification_cannot_be_instantiated_directly
 def test_specification_cannot_be_instantiated_directly() -> None:
@@ -576,13 +554,13 @@ def test_entering_child_scope_yields_none_when_not_found() -> None:
         assert walker.current_scope is parent
     assert walker.scope_stack == [parent]
 
-# ** test: apply_attachments_invokes_matching_callables
-def test_apply_attachments_invokes_matching_callables() -> None:
+# ** test: apply_provisions_invokes_matching_callables
+def test_apply_provisions_invokes_matching_callables() -> None:
     '''
-    Test that only attachments for the visit hook are invoked.
+    Test that only provisions for the visit hook are invoked.
     '''
 
-    # The return attachment is not invoked for an expression visit.
+    # The return provision is not invoked for an expression visit.
     calls = []
 
     class _RecordingSpec(Specification):
@@ -592,7 +570,7 @@ def test_apply_attachments_invokes_matching_callables() -> None:
 
         def evaluate(self, candidate, context):
             '''
-            Record this attachment id.
+            Record this provision id.
 
             :param candidate: The ignored candidate.
             :param context: The ignored context.
@@ -605,8 +583,8 @@ def test_apply_attachments_invokes_matching_callables() -> None:
 
     matched = _RecordingSpec(id='matched', applies_to='expression')
     skipped = _RecordingSpec(id='skipped', applies_to='return')
-    walker = StatementWalker(attachments=[matched, skipped])
-    result = walker.apply_attachments('expression', None, None)
+    walker = StatementWalker(provisions=[matched, skipped])
+    result = walker.apply_provisions('expression', None, None)
     assert calls == ['matched']
     assert result == [[]]
 

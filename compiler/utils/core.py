@@ -3,9 +3,11 @@
 # *** imports
 
 # ** core
-from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from typing import Any, Callable, ClassVar, Dict, FrozenSet, Iterator, List, Optional
+
+# ** infra
+from pydantic import Field
 
 # ** app
 from ..mappers import (
@@ -13,7 +15,10 @@ from ..mappers import (
     Declaration,
     ExprKind,
     Expression,
+    Provision,
+    Rewrite,
     ScopeAggregate,
+    Specification,
     Statement,
 )
 
@@ -286,369 +291,6 @@ def _has_not_implemented_body(
     return expr.left.name == callee_name
 
 # *** classes
-
-# ** class: attachment
-class Attachment:
-    '''
-    A callable rule a host can attach to one visit hook.
-
-    Hosts invoke every attachment the same way. Kind-specific work stays behind
-    the specialization, not in the host.
-    '''
-
-    # * attribute: id
-    id: str
-
-    # * attribute: applies_to
-    applies_to: str
-
-    # * init
-    def __init__(self, id: str, applies_to: str) -> None:
-        '''
-        Store the attachment identity and visit hook.
-
-        :param id: The unique attachment id.
-        :type id: str
-        :param applies_to: The visit hook this attachment handles.
-        :type applies_to: str
-        :return: None
-        :rtype: None
-        '''
-
-        # Store the identity the host uses to cite this attachment.
-        self.id = id
-
-        # Store the single visit hook this attachment handles.
-        self.applies_to = applies_to
-
-    # * method: attaches_to
-    def attaches_to(self, hook: str) -> bool:
-        '''
-        Report whether this attachment applies to a visit hook.
-
-        :param hook: The visit hook the host is entering.
-        :type hook: str
-        :return: True when the hook equals ``applies_to``.
-        :rtype: bool
-        '''
-
-        # Match the stored visit hook exactly.
-        return self.applies_to == hook
-
-    # * method: __call__
-    def __call__(self, candidate: Any, context: Any) -> Any:
-        '''
-        Invoke this attachment on a candidate.
-
-        :param candidate: The node being visited.
-        :type candidate: Any
-        :param context: The host visit context.
-        :type context: Any
-        :return: Never returns.
-        :rtype: Any
-        :raises NotImplementedError: Specializations override this method.
-        '''
-
-        # The base attachment has no kind-specific implementation.
-        raise NotImplementedError
-
-# ** class: specification
-class Specification(Attachment, ABC):
-    '''
-    A pass/fail attachment that records findings instead of mutating the candidate.
-
-    A candidate satisfies the specification when evaluation returns no findings.
-    '''
-
-    # * method: evaluate
-    @abstractmethod
-    def evaluate(self, candidate: Any, context: Any) -> List[Dict]:
-        '''
-        Evaluate the candidate and return any findings.
-
-        :param candidate: The node being visited.
-        :type candidate: Any
-        :param context: The host visit context.
-        :type context: Any
-        :return: Finding dicts, empty when the candidate is satisfactory.
-        :rtype: List[Dict]
-        '''
-
-    # * method: __call__
-    def __call__(self, candidate: Any, context: Any) -> List[Dict]:
-        '''
-        Evaluate the candidate through the callable host contract.
-
-        :param candidate: The node being visited.
-        :type candidate: Any
-        :param context: The host visit context.
-        :type context: Any
-        :return: The findings from ``evaluate``.
-        :rtype: List[Dict]
-        '''
-
-        # Hosts and combinators call the attachment; evaluation stays behind that call.
-        return self.evaluate(candidate, context)
-
-    # * method: is_satisfied_by
-    def is_satisfied_by(self, candidate: Any, context: Any) -> bool:
-        '''
-        Report whether the candidate produces no findings.
-
-        :param candidate: The node being visited.
-        :type candidate: Any
-        :param context: The host visit context.
-        :type context: Any
-        :return: True when evaluation returns no findings.
-        :rtype: bool
-        '''
-
-        # An empty finding list is satisfaction.
-        return not self.evaluate(candidate, context)
-
-# ** class: production
-class Production(Attachment, ABC):
-    '''
-    An attachment that writes into the accumulator the context supplies.
-
-    Productions do not pass or fail. They record what the visit found.
-    '''
-
-    # * method: apply
-    @abstractmethod
-    def apply(self, candidate: Any, context: Any) -> None:
-        '''
-        Record the candidate into the context accumulator.
-
-        :param candidate: The node being visited.
-        :type candidate: Any
-        :param context: The host visit context.
-        :type context: Any
-        :return: None
-        :rtype: None
-        '''
-
-    # * method: __call__
-    def __call__(self, candidate: Any, context: Any) -> None:
-        '''
-        Apply the production through the callable host contract.
-
-        :param candidate: The node being visited.
-        :type candidate: Any
-        :param context: The host visit context.
-        :type context: Any
-        :return: None
-        :rtype: None
-        '''
-
-        # Hosts call the attachment; recording stays behind that call.
-        return self.apply(candidate, context)
-
-# ** class: rewrite
-class Rewrite(Attachment, ABC):
-    '''
-    An attachment that returns a contribution the host merges, or None.
-
-    Rewrites do not decide pass or fail. The host owns the merge.
-    '''
-
-    # * method: apply
-    @abstractmethod
-    def apply(self, candidate: Any, context: Any) -> Any:
-        '''
-        Produce a contribution for the host to merge.
-
-        :param candidate: The node being visited.
-        :type candidate: Any
-        :param context: The host visit context.
-        :type context: Any
-        :return: The contribution, or None.
-        :rtype: Any
-        '''
-
-    # * method: __call__
-    def __call__(self, candidate: Any, context: Any) -> Any:
-        '''
-        Apply the rewrite through the callable host contract.
-
-        :param candidate: The node being visited.
-        :type candidate: Any
-        :param context: The host visit context.
-        :type context: Any
-        :return: The contribution from ``apply``.
-        :rtype: Any
-        '''
-
-        # Hosts call the attachment; the contribution stays behind that call.
-        return self.apply(candidate, context)
-
-# ** class: all_of
-class AllOf(Specification):
-    '''
-    A specification that is satisfied only when every child is satisfied.
-
-    Findings are concatenated in child order so a host can report every failure.
-    '''
-
-    # * attribute: specs
-    specs: List[Specification]
-
-    # * init
-    def __init__(self, id: str, applies_to: str,
-                 specs: Optional[List[Specification]] = None) -> None:
-        '''
-        Store the child specifications.
-
-        :param id: The unique attachment id.
-        :type id: str
-        :param applies_to: The visit hook this attachment handles.
-        :type applies_to: str
-        :param specs: The child specifications, or None for an empty list.
-        :type specs: Optional[List[Specification]]
-        :return: None
-        :rtype: None
-        '''
-
-        # Store the identity and hook on the attachment base.
-        super().__init__(id=id, applies_to=applies_to)
-
-        # An omitted child list is an empty conjunction.
-        self.specs = specs or []
-
-    # * method: evaluate
-    def evaluate(self, candidate: Any, context: Any) -> List[Dict]:
-        '''
-        Concatenate every child's findings in child order.
-
-        :param candidate: The node being visited.
-        :type candidate: Any
-        :param context: The host visit context.
-        :type context: Any
-        :return: The concatenated findings.
-        :rtype: List[Dict]
-        '''
-
-        # Call each child as an attachment, preserving child order.
-        findings = []
-        for spec in self.specs:
-            findings.extend(spec(candidate, context))
-
-        # Return every finding, including when the list is empty.
-        return findings
-
-# ** class: any_of
-class AnyOf(Specification):
-    '''
-    A specification that is satisfied when any child is satisfied.
-
-    Concatenated findings surface only when every child is unsatisfied.
-    '''
-
-    # * attribute: specs
-    specs: List[Specification]
-
-    # * init
-    def __init__(self, id: str, applies_to: str,
-                 specs: Optional[List[Specification]] = None) -> None:
-        '''
-        Store the child specifications.
-
-        :param id: The unique attachment id.
-        :type id: str
-        :param applies_to: The visit hook this attachment handles.
-        :type applies_to: str
-        :param specs: The child specifications, or None for an empty list.
-        :type specs: Optional[List[Specification]]
-        :return: None
-        :rtype: None
-        '''
-
-        # Store the identity and hook on the attachment base.
-        super().__init__(id=id, applies_to=applies_to)
-
-        # An omitted child list is an empty disjunction.
-        self.specs = specs or []
-
-    # * method: evaluate
-    def evaluate(self, candidate: Any, context: Any) -> List[Dict]:
-        '''
-        Return no findings when any child is satisfied.
-
-        :param candidate: The node being visited.
-        :type candidate: Any
-        :param context: The host visit context.
-        :type context: Any
-        :return: An empty list when any child is satisfied; otherwise concatenated findings.
-        :rtype: List[Dict]
-        '''
-
-        # Call each child as an attachment before deciding satisfaction.
-        results = [spec(candidate, context) for spec in self.specs]
-        if any(not result for result in results):
-            return []
-
-        # Every child failed, so surface the concatenated findings.
-        findings = []
-        for result in results:
-            findings.extend(result)
-        return findings
-
-# ** class: not_
-class Not(Specification):
-    '''
-    A specification that negates one child.
-
-    Satisfaction of the child is itself a violation of the negation.
-    '''
-
-    # * attribute: spec
-    spec: Specification
-
-    # * init
-    def __init__(self, id: str, applies_to: str, spec: Specification) -> None:
-        '''
-        Store the child specification.
-
-        :param id: The unique attachment id.
-        :type id: str
-        :param applies_to: The visit hook this attachment handles.
-        :type applies_to: str
-        :param spec: The child specification.
-        :type spec: Specification
-        :return: None
-        :rtype: None
-        '''
-
-        # Store the identity and hook on the attachment base.
-        super().__init__(id=id, applies_to=applies_to)
-
-        # Store the single child this negation wraps.
-        self.spec = spec
-
-    # * method: evaluate
-    def evaluate(self, candidate: Any, context: Any) -> List[Dict]:
-        '''
-        Violate when the child is satisfied.
-
-        :param candidate: The node being visited.
-        :type candidate: Any
-        :param context: The host visit context.
-        :type context: Any
-        :return: One finding when the child is satisfied; otherwise an empty list.
-        :rtype: List[Dict]
-        '''
-
-        # A satisfied child violates the negation.
-        if not self.spec(candidate, context):
-            return [{
-                'error_code': f'{self.id}_VIOLATION'.upper(),
-                'message': (
-                    f'Candidate unexpectedly satisfied negated specification "{self.spec.id}".'
-                ),
-            }]
-
-        # An unsatisfied child satisfies the negation.
-        return []
 
 # ** class: conformance_context
 class ConformanceContext:
@@ -966,7 +608,7 @@ class StatementWalker:
     '''
     Shared AST-walking mechanics for later hosts.
 
-    Subclasses supply the attachment list and the visit context. They do not
+    Subclasses supply the provision list and the visit context. They do not
     copy statement dispatch, the scope stack, or the attaches_to loop.
     '''
 
@@ -976,51 +618,51 @@ class StatementWalker:
     # * attribute: scope_stack
     scope_stack: List[ScopeAggregate]
 
-    # * attribute: attachments
-    attachments: List[Attachment]
+    # * attribute: provisions
+    provisions: List[Provision]
 
     # * init
-    def __init__(self, scopes=None, attachments=None) -> None:
+    def __init__(self, scopes=None, provisions=None) -> None:
         '''
-        Store the scope registry and attachment list.
+        Store the scope registry and provision list.
 
         :param scopes: The flat path-to-scope registry.
         :type scopes: Optional[Dict[str, ScopeAggregate]]
-        :param attachments: The attachments this host invokes.
-        :type attachments: Optional[List[Attachment]]
+        :param provisions: The provisions this host invokes.
+        :type provisions: Optional[List[Provision]]
         :return: None
         :rtype: None
         '''
 
         # Preserve an explicitly empty registry; only None becomes a new mapping.
         self.scopes = scopes if scopes is not None else {}
-        self.attachments = attachments if attachments is not None else []
+        self.provisions = provisions if provisions is not None else []
 
         # The walk starts outside every scope.
         self.scope_stack = []
 
     # * method: _invoke
-    def _invoke(self, attachment: Attachment, candidate: Any, context: Any) -> Any:
+    def _invoke(self, provision: Provision, candidate: Any, context: Any) -> Any:
         '''
-        Invoke one attachment as a callable.
+        Invoke one provision as a callable.
 
-        :param attachment: The attachment to invoke.
-        :type attachment: Attachment
+        :param provision: The provision to invoke.
+        :type provision: Provision
         :param candidate: The node being visited.
         :type candidate: Any
         :param context: The host visit context.
         :type context: Any
-        :return: The attachment result.
+        :return: The provision result.
         :rtype: Any
         '''
 
-        # Hosts invoke attachments as callables, not by kind-specific method names.
-        return attachment(candidate, context)
+        # Hosts invoke provisions as callables, not by kind-specific method names.
+        return provision(candidate, context)
 
-    # * method: apply_attachments
-    def apply_attachments(self, visit: str, candidate: Any, context: Any) -> List[Any]:
+    # * method: apply_provisions
+    def apply_provisions(self, visit: str, candidate: Any, context: Any) -> List[Any]:
         '''
-        Invoke every attachment whose hook matches the visit.
+        Invoke every provision whose hook matches the visit.
 
         :param visit: The visit hook.
         :type visit: str
@@ -1028,15 +670,15 @@ class StatementWalker:
         :type candidate: Any
         :param context: The host visit context.
         :type context: Any
-        :return: Results in attachment-list order.
+        :return: Results in provision-list order.
         :rtype: List[Any]
         '''
 
-        # This is the only attaches_to loop. Preserve attachment-list order.
+        # This is the only attaches_to loop. Preserve provision-list order.
         results = []
-        for attachment in self.attachments:
-            if attachment.attaches_to(visit):
-                results.append(self._invoke(attachment, candidate, context))
+        for provision in self.provisions:
+            if provision.attaches_to(visit):
+                results.append(self._invoke(provision, candidate, context))
 
         # Return the matching results, including when none matched.
         return results
@@ -1487,7 +1129,7 @@ class FunctionSectionNameSpecification(Specification):
     '''
 
     # * attribute: section_keyword
-    SECTION_KEYWORD = 'function'
+    SECTION_KEYWORD: ClassVar[str] = 'function'
 
     # * method: evaluate
     def evaluate(self, candidate: Any, context: Any) -> List[Dict]:
@@ -1658,10 +1300,10 @@ class MethodMemberSpecification(Specification):
     '''
 
     # * attribute: validator_qualifier
-    VALIDATOR_QUALIFIER = 'validator'
+    VALIDATOR_QUALIFIER: ClassVar[str] = 'validator'
 
     # * attribute: static_qualifier
-    STATIC_QUALIFIER = 'static'
+    STATIC_QUALIFIER: ClassVar[str] = 'static'
 
     # * method: classify_decorators (static)
     @staticmethod
@@ -2005,49 +1647,28 @@ class PermittedGroupSpecification(Specification):
     '''
 
     # * attribute: permitted_groups
-    permitted_groups: FrozenSet[str]
-
-    # * attribute: error_code
-    error_code: str
-
-    # * attribute: module_label
-    module_label: str
-
-    # * init
-    def __init__(self, id: str, applies_to: str,
-                 permitted_groups: Optional[FrozenSet[str]] = None,
-                 error_code: str = 'DISALLOWED_ASSET_GROUP',
-                 module_label: str = 'an assets module') -> None:
-        '''
-        Store the permitted groups and the finding text.
-
-        :param id: The unique attachment id.
-        :type id: str
-        :param applies_to: The visit hook this attachment handles.
-        :type applies_to: str
-        :param permitted_groups: Permitted tier-1 group names, or None for the assets default.
-        :type permitted_groups: Optional[FrozenSet[str]]
-        :param error_code: The finding code for a disallowed group.
-        :type error_code: str
-        :param module_label: The module kind inserted in the finding message.
-        :type module_label: str
-        :return: None
-        :rtype: None
-        '''
-
-        # Store the identity and hook on the attachment base.
-        super().__init__(id=id, applies_to=applies_to)
-
-        # An omitted set is the assets default, not an actor dialect.
-        self.permitted_groups = frozenset(permitted_groups or {
+    permitted_groups: FrozenSet[str] = Field(
+        default_factory=lambda: frozenset({
             'imports',
             'constants',
             'functions',
             'classes',
             'exports',
-        })
-        self.error_code = error_code
-        self.module_label = module_label
+        }),
+        description='Permitted tier-1 group names, or the assets default.',
+    )
+
+    # * attribute: error_code
+    error_code: str = Field(
+        'DISALLOWED_ASSET_GROUP',
+        description='The finding code for a disallowed group.',
+    )
+
+    # * attribute: module_label
+    module_label: str = Field(
+        'an assets module',
+        description='The module kind inserted in the finding message.',
+    )
 
     # * method: evaluate
     def evaluate(self, candidate: Declaration,
@@ -2095,57 +1716,34 @@ class AppImportSpecification(Specification):
     '''
 
     # * attribute: allowed_components
-    allowed_components: FrozenSet[str]
+    allowed_components: FrozenSet[str] = Field(
+        default_factory=frozenset,
+        description='Component types permitted besides siblings.',
+    )
 
     # * attribute: error_code
-    error_code: str
+    error_code: str = Field(
+        ...,
+        description='The finding code for a disallowed import.',
+    )
 
     # * attribute: message
-    message: str
+    message: str = Field(
+        ...,
+        description='The finding template. It may contain ``{module_path}``.',
+    )
 
     # * attribute: allow_siblings
-    allow_siblings: bool
+    allow_siblings: bool = Field(
+        True,
+        description='Whether a single-dot relative import is allowed.',
+    )
 
     # * attribute: allow_framework_root_alias
-    allow_framework_root_alias: bool
-
-    # * init
-    def __init__(self, id: str, applies_to: str,
-                 error_code: str,
-                 message: str,
-                 allowed_components: Optional[FrozenSet[str]] = None,
-                 allow_siblings: bool = True,
-                 allow_framework_root_alias: bool = False) -> None:
-        '''
-        Store the allowed component types and the finding text.
-
-        :param id: The unique attachment id.
-        :type id: str
-        :param applies_to: The visit hook this attachment handles.
-        :type applies_to: str
-        :param error_code: The finding code for a disallowed import.
-        :type error_code: str
-        :param message: The finding template. It may contain ``{module_path}``.
-        :type message: str
-        :param allowed_components: Component types permitted besides siblings.
-        :type allowed_components: Optional[FrozenSet[str]]
-        :param allow_siblings: Whether a single-dot relative import is allowed.
-        :type allow_siblings: bool
-        :param allow_framework_root_alias: Whether ``from .. import a`` is allowed.
-        :type allow_framework_root_alias: bool
-        :return: None
-        :rtype: None
-        '''
-
-        # Store the identity and hook on the attachment base.
-        super().__init__(id=id, applies_to=applies_to)
-
-        # An omitted component set allows no component types beyond siblings.
-        self.allowed_components = frozenset(allowed_components or [])
-        self.error_code = error_code
-        self.message = message
-        self.allow_siblings = allow_siblings
-        self.allow_framework_root_alias = allow_framework_root_alias
+    allow_framework_root_alias: bool = Field(
+        False,
+        description='Whether ``from .. import a`` is allowed.',
+    )
 
     # * method: evaluate
     def evaluate(self, candidate: Declaration,
@@ -2276,64 +1874,40 @@ class RequiredBaseSpecification(Specification):
     '''
 
     # * attribute: section_keyword
-    section_keyword: str
+    section_keyword: str = Field(
+        ...,
+        description='The section keyword this rule judges.',
+    )
 
     # * attribute: error_code
-    error_code: str
+    error_code: str = Field(
+        ...,
+        description='The finding code for a missing or wrong base.',
+    )
 
     # * attribute: message
-    message: str
+    message: str = Field(
+        ...,
+        description='The finding template.',
+    )
 
     # * attribute: name_key
-    name_key: Optional[str]
+    name_key: Optional[str] = Field(
+        None,
+        description='Optional extra finding key for the header name.',
+    )
 
     # * attribute: required_base
-    required_base: Optional[str]
+    required_base: Optional[str] = Field(
+        None,
+        description='The required base name, or None when any base satisfies.',
+    )
 
     # * attribute: predicate
-    predicate: Optional[Callable[..., bool]]
-
-    # * init
-    def __init__(self, id: str, applies_to: str,
-                 section_keyword: str,
-                 error_code: str,
-                 message: str,
-                 name_key: Optional[str] = None,
-                 required_base: Optional[str] = None,
-                 predicate: Optional[Callable[..., bool]] = None) -> None:
-        '''
-        Store the section keyword, the acceptable base, and the finding text.
-
-        :param id: The unique attachment id.
-        :type id: str
-        :param applies_to: The visit hook this attachment handles.
-        :type applies_to: str
-        :param section_keyword: The section keyword this rule judges.
-        :type section_keyword: str
-        :param error_code: The finding code for a missing or wrong base.
-        :type error_code: str
-        :param message: The finding template.
-        :type message: str
-        :param name_key: Optional extra finding key for the header name.
-        :type name_key: Optional[str]
-        :param required_base: The required base name, or None when any base satisfies.
-        :type required_base: Optional[str]
-        :param predicate: Optional skip predicate. False skips the rule.
-        :type predicate: Optional[Callable[..., bool]]
-        :return: None
-        :rtype: None
-        '''
-
-        # Store the identity and hook on the attachment base.
-        super().__init__(id=id, applies_to=applies_to)
-
-        # Store each rule argument without interpreting the predicate.
-        self.section_keyword = section_keyword
-        self.error_code = error_code
-        self.message = message
-        self.name_key = name_key
-        self.required_base = required_base
-        self.predicate = predicate
+    predicate: Optional[Callable[..., bool]] = Field(
+        None,
+        description='Optional skip predicate. False skips the rule.',
+    )
 
     # * method: evaluate
     def evaluate(self, candidate: Declaration,
@@ -2403,7 +1977,7 @@ class EventSectionSpecification(Specification):
     '''
 
     # * attribute: section_keyword
-    SECTION_KEYWORD = 'event'
+    SECTION_KEYWORD: ClassVar[str] = 'event'
 
     # * method: evaluate
     def evaluate(self, candidate: Any, context: Any) -> List[Dict]:
@@ -2452,7 +2026,7 @@ class GroupSectionAgreementSpecification(Specification):
     '''
 
     # * attribute: group_section_keywords
-    GROUP_SECTION_KEYWORDS = {
+    GROUP_SECTION_KEYWORDS: ClassVar[Dict[str, str]] = {
         'constants': 'constant',
         'functions': 'function',
         'classes': 'class',
@@ -2545,7 +2119,7 @@ class ConstantSectionNameSpecification(Specification):
     '''
 
     # * attribute: section_keyword
-    SECTION_KEYWORD = 'constant'
+    SECTION_KEYWORD: ClassVar[str] = 'constant'
 
     # * method: evaluate
     def evaluate(self, candidate: Any, context: Any) -> List[Dict]:
@@ -2619,10 +2193,10 @@ class DomainAttributeSpecification(Specification):
     '''
 
     # * attribute: field_callee
-    FIELD_CALLEE = 'Field'
+    FIELD_CALLEE: ClassVar[str] = 'Field'
 
     # * attribute: description_kwarg
-    DESCRIPTION_KWARG = 'description'
+    DESCRIPTION_KWARG: ClassVar[str] = 'description'
 
     # * method: evaluate
     def evaluate(self, candidate: Any, context: Any) -> List[Dict]:
@@ -2752,10 +2326,10 @@ class MapperRolesAttributeSpecification(Specification):
     '''
 
     # * attribute: roles_attribute_name
-    ROLES_ATTRIBUTE_NAME = '_ROLES'
+    ROLES_ATTRIBUTE_NAME: ClassVar[str] = '_ROLES'
 
     # * attribute: expected_type_name
-    EXPECTED_TYPE_NAME = 'ClassVar'
+    EXPECTED_TYPE_NAME: ClassVar[str] = 'ClassVar'
 
     # * method: evaluate
     def evaluate(self, candidate: Any, context: Any) -> List[Dict]:
@@ -2808,13 +2382,13 @@ class InterfaceAbstractMethodSpecification(Specification):
     '''
 
     # * attribute: section_keyword
-    SECTION_KEYWORD = 'interface'
+    SECTION_KEYWORD: ClassVar[str] = 'interface'
 
     # * attribute: root_base
-    ROOT_BASE = 'ABC'
+    ROOT_BASE: ClassVar[str] = 'ABC'
 
     # * attribute: not_implemented_callee
-    NOT_IMPLEMENTED_CALLEE = 'NotImplementedError'
+    NOT_IMPLEMENTED_CALLEE: ClassVar[str] = 'NotImplementedError'
 
     # * method: evaluate
     def evaluate(self, candidate: Any, context: Any) -> List[Dict]:
@@ -2936,10 +2510,10 @@ class DIAbstractMethodSpecification(Specification):
     '''
 
     # * attribute: section_keyword
-    SECTION_KEYWORD = 'class'
+    SECTION_KEYWORD: ClassVar[str] = 'class'
 
     # * attribute: not_implemented_callee
-    NOT_IMPLEMENTED_CALLEE = 'NotImplementedError'
+    NOT_IMPLEMENTED_CALLEE: ClassVar[str] = 'NotImplementedError'
 
     # * method: evaluate
     def evaluate(self, candidate: Any, context: Any) -> List[Dict]:
@@ -2998,19 +2572,19 @@ class ContextManagerPairingSpecification(Specification):
     '''
 
     # * attribute: section_keyword
-    SECTION_KEYWORD = 'util'
+    SECTION_KEYWORD: ClassVar[str] = 'util'
 
     # * attribute: context_manager_qualifier
-    CONTEXT_MANAGER_QUALIFIER = 'context manager'
+    CONTEXT_MANAGER_QUALIFIER: ClassVar[str] = 'context manager'
 
     # * attribute: enter_name
-    ENTER_NAME = '__enter__'
+    ENTER_NAME: ClassVar[str] = '__enter__'
 
     # * attribute: exit_name
-    EXIT_NAME = '__exit__'
+    EXIT_NAME: ClassVar[str] = '__exit__'
 
     # * attribute: exit_param_count
-    EXIT_PARAM_COUNT = 4
+    EXIT_PARAM_COUNT: ClassVar[int] = 4
 
     # * method: evaluate
     def evaluate(self, candidate: Any, context: Any) -> List[Dict]:
@@ -3139,10 +2713,10 @@ class ReposCrudMethodSpecification(Specification):
     '''
 
     # * attribute: section_keyword
-    SECTION_KEYWORD = 'repo'
+    SECTION_KEYWORD: ClassVar[str] = 'repo'
 
     # * attribute: crud_methods
-    CRUD_METHODS = frozenset({'exists', 'get', 'list', 'save', 'delete'})
+    CRUD_METHODS: ClassVar[FrozenSet[str]] = frozenset({'exists', 'get', 'list', 'save', 'delete'})
 
     # * method: evaluate
     def evaluate(self, candidate: Any, context: Any) -> List[Dict]:

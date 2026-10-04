@@ -731,15 +731,15 @@ def test_binary_op_str_subtraction_invalid() -> None:
     # The unsupported subtraction is the only finding.
     assert _codes(module) == ['TYPE_MISMATCH_OPERATION']
 
-# ** test: checker_uses_apply_attachments
-def test_checker_uses_apply_attachments() -> None:
+# ** test: checker_uses_apply_provisions
+def test_checker_uses_apply_provisions() -> None:
     '''
-    Test that ConformanceChecker.apply calls StatementWalker.apply_attachments.
+    Test that ConformanceChecker.apply calls StatementWalker.apply_provisions.
     '''
 
     # The method dispatches through the shared loop. It does not copy attaches_to.
     source = inspect.getsource(ConformanceChecker.apply)
-    assert 'apply_attachments' in source
+    assert 'apply_provisions' in source
     assert 'attaches_to' not in source
 
     # A tier-1 group applies its own header before the push, then the nested header.
@@ -747,7 +747,7 @@ def test_checker_uses_apply_attachments() -> None:
 
     def _record(visit, candidate, context):
         '''
-        Record the visit hook and the group name passed to apply_attachments.
+        Record the visit hook and the group name passed to apply_provisions.
 
         :param visit: The visit hook.
         :param candidate: The ignored candidate.
@@ -760,7 +760,7 @@ def test_checker_uses_apply_attachments() -> None:
         return []
 
     checker = ConformanceChecker(scopes={}, rule_set=[])
-    checker.apply_attachments = _record
+    checker.apply_provisions = _record
     group = _group('imports', [
         _import_section('core', []),
     ])

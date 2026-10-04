@@ -598,10 +598,10 @@ def test_comments_skipped() -> None:
     assert 'keep me out' not in names
     assert names == ['DomainEvent']
 
-# ** test: builder_uses_apply_attachments
-def test_builder_uses_apply_attachments(monkeypatch) -> None:
+# ** test: builder_uses_apply_provisions
+def test_builder_uses_apply_provisions(monkeypatch) -> None:
     '''
-    Test that SymbolTableBuilder.apply calls StatementWalker.apply_attachments.
+    Test that SymbolTableBuilder.apply calls StatementWalker.apply_provisions.
 
     :param monkeypatch: The pytest monkeypatch fixture.
     :type monkeypatch: object
@@ -609,9 +609,9 @@ def test_builder_uses_apply_attachments(monkeypatch) -> None:
 
     # The host does not copy the attaches_to loop.
     source = inspect.getsource(SymbolTableBuilder.apply)
-    assert 'apply_attachments' in source
+    assert 'apply_provisions' in source
     assert 'attaches_to' not in source
-    assert SymbolTableBuilder.apply_attachments is StatementWalker.apply_attachments
+    assert SymbolTableBuilder.apply_provisions is StatementWalker.apply_provisions
 
     # The default set is the builder production set, in TRD order.
     builder = SymbolTableBuilder()
@@ -633,7 +633,7 @@ def test_builder_uses_apply_attachments(monkeypatch) -> None:
 
     def spy(self, visit, candidate, context):
         '''
-        Record the apply_attachments call.
+        Record the apply_provisions call.
 
         :param self: The walker.
         :param visit: The visit hook.
@@ -646,14 +646,14 @@ def test_builder_uses_apply_attachments(monkeypatch) -> None:
         calls.append((self, visit, candidate))
         return []
 
-    monkeypatch.setattr(StatementWalker, 'apply_attachments', spy)
+    monkeypatch.setattr(StatementWalker, 'apply_provisions', spy)
     builder.apply('import', 'candidate')
     assert calls == [(builder, 'import', 'candidate')]
 
-# ** test: resolver_uses_apply_attachments
-def test_resolver_uses_apply_attachments(monkeypatch) -> None:
+# ** test: resolver_uses_apply_provisions
+def test_resolver_uses_apply_provisions(monkeypatch) -> None:
     '''
-    Test that NameResolver.apply calls StatementWalker.apply_attachments.
+    Test that NameResolver.apply calls StatementWalker.apply_provisions.
 
     :param monkeypatch: The pytest monkeypatch fixture.
     :type monkeypatch: object
@@ -661,9 +661,9 @@ def test_resolver_uses_apply_attachments(monkeypatch) -> None:
 
     # The host does not copy the attaches_to loop.
     source = inspect.getsource(NameResolver.apply)
-    assert 'apply_attachments' in source
+    assert 'apply_provisions' in source
     assert 'attaches_to' not in source
-    assert NameResolver.apply_attachments is StatementWalker.apply_attachments
+    assert NameResolver.apply_provisions is StatementWalker.apply_provisions
 
     # The default set is the resolver production set, in TRD order.
     resolver = NameResolver(scopes={})
@@ -681,7 +681,7 @@ def test_resolver_uses_apply_attachments(monkeypatch) -> None:
 
     def spy(self, visit, candidate, context):
         '''
-        Record the apply_attachments call.
+        Record the apply_provisions call.
 
         :param self: The walker.
         :param visit: The visit hook.
@@ -694,6 +694,6 @@ def test_resolver_uses_apply_attachments(monkeypatch) -> None:
         calls.append((self, visit, candidate, context.accumulator))
         return []
 
-    monkeypatch.setattr(StatementWalker, 'apply_attachments', spy)
+    monkeypatch.setattr(StatementWalker, 'apply_provisions', spy)
     resolver.apply('name', 'DomainEvent')
     assert calls == [(resolver, 'name', 'DomainEvent', resolver._accumulator)]
