@@ -30,6 +30,8 @@ from ..mappers.transfer import (
     StatementTransferObject,
     TypeTransferObject,
 )
+from ..blueprints.core import build_cache
+from ..contexts.provision import COMPILER_PROVISION_CACHE_PREFIX
 from ..utils.codegen import TiferetGenerator
 from ..utils.semantic import SymbolTableBuilder
 
@@ -311,15 +313,31 @@ def test_findings_accumulate():
         [],
     )
     ast = DeclarationAggregate.new_module_decl(name='bad_domain', code=[group])
+    cache = build_cache()
     semantic = {
-        'symbol_table': SymbolTableBuilder().build(ast),
+        'symbol_table': SymbolTableBuilder(
+            cache,
+            COMPILER_PROVISION_CACHE_PREFIX,
+        ).build(ast),
     }
 
     # The first call seeds the list. The second call prepends that list.
     event = CheckDomainConformance()
-    first = event.execute(ast=ast, semantic=semantic, findings=None)
+    first = event.execute(
+        ast=ast,
+        semantic=semantic,
+        cache=cache,
+        provision_prefix=COMPILER_PROVISION_CACHE_PREFIX,
+        findings=None,
+    )
     assert isinstance(first, list)
-    second = event.execute(ast=ast, semantic=semantic, findings=first)
+    second = event.execute(
+        ast=ast,
+        semantic=semantic,
+        cache=cache,
+        provision_prefix=COMPILER_PROVISION_CACHE_PREFIX,
+        findings=first,
+    )
     assert isinstance(second, list)
     assert len(second) >= len(first)
     assert all(

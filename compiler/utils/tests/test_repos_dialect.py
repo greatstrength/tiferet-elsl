@@ -27,7 +27,9 @@ from .parser_test_helpers import (
 from ..lexer import TiferetLexer
 from ..parser import TiferetParser
 from ..semantic import SymbolTableBuilder
-from ..typecheck import REPOS_RULE_SET, ConformanceChecker
+from ...blueprints.core import build_cache
+from ...contexts.provision import COMPILER_PROVISION_CACHE_PREFIX
+from ..typecheck import ConformanceChecker
 
 # *** constants
 
@@ -87,6 +89,20 @@ class _ParserHarness:
         )
 
 # *** functions
+
+# ** function: _provision_cache
+def _provision_cache():
+    '''
+    Return one cache seeded by the compiler blueprint.
+
+    :return: The seeded cache.
+    :rtype: Any
+    '''
+
+    # Dialect tests read the seed. They do not rebuild the deleted lists.
+    if not hasattr(_provision_cache, 'cache'):
+        _provision_cache.cache = build_cache()
+    return _provision_cache.cache
 
 # ** function: _parser
 def _parser() -> _ParserHarness:
@@ -341,11 +357,14 @@ def check_repos(module) -> list:
     '''
 
     # The checker reads the live registry, not the dumped build dict.
-    builder = SymbolTableBuilder()
+    cache = _provision_cache()
+    builder = SymbolTableBuilder(cache, COMPILER_PROVISION_CACHE_PREFIX)
     builder.build(module)
     return ConformanceChecker(
-        scopes=builder.scopes,
-        rule_set=REPOS_RULE_SET,
+        builder.scopes,
+        cache,
+        'repos.',
+        COMPILER_PROVISION_CACHE_PREFIX,
     ).check(module)
 
 # ** function: _codes

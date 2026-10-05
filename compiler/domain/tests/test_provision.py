@@ -13,6 +13,8 @@ import pytest
 from pydantic import ValidationError
 
 # ** app
+from compiler.blueprints.core import build_cache
+from compiler.contexts.provision import COMPILER_PROVISION_CACHE_PREFIX
 from compiler.utils import codegen, core, optimizer, semantic, typecheck
 from compiler.utils.core import (
     AppImportSpecification,
@@ -24,6 +26,8 @@ from compiler.utils.core import (
     StatementWalker,
     declares_bound_domain_type,
 )
+from compiler.utils.semantic import SymbolTableBuilder
+from compiler.utils.typecheck import ConformanceChecker
 from ..provision import (
     PROVISION_KIND_PRODUCTION,
     PROVISION_KIND_REWRITE,
@@ -160,13 +164,20 @@ def test_keyword_call_sites_keep_field_values() -> None:
     Test that existing keyword constructions expose the same field values.
     '''
 
-    # The domain rows are the existing permitted-group and app-import call sites.
+    # The domain rows are instantiated from the seeded cache, not a module list.
+    cache = build_cache()
+    domain = ConformanceChecker(
+        {},
+        cache,
+        'domain.',
+        COMPILER_PROVISION_CACHE_PREFIX,
+    ).provisions
     permitted = next(
-        item for item in typecheck.DOMAIN_RULE_SET
+        item for item in domain
         if item.id == 'domain.permitted_group'
     )
     app_import = next(
-        item for item in typecheck.DOMAIN_RULE_SET
+        item for item in domain
         if item.id == 'domain.app_import'
     )
     assert isinstance(permitted, PermittedGroupSpecification)
@@ -186,8 +197,14 @@ def test_keyword_call_sites_keep_field_values() -> None:
     assert app_import.allow_framework_root_alias is False
 
     # The contexts row still carries a callable predicate, not a string.
+    contexts = ConformanceChecker(
+        {},
+        cache,
+        'contexts.',
+        COMPILER_PROVISION_CACHE_PREFIX,
+    ).provisions
     required = next(
-        item for item in typecheck.CONTEXTS_RULE_SET
+        item for item in contexts
         if item.id == 'contexts.base_class'
     )
     assert isinstance(required, RequiredBaseSpecification)
@@ -303,8 +320,21 @@ def test_rule_sets_still_construct() -> None:
     Test that the published rule sets and production sets still construct.
     '''
 
-    # Construction is the call-site contract. Findings stay with the host suites.
-    assert typecheck.COMMON_RULE_SET
-    assert all(isinstance(item, Specification) for item in typecheck.COMMON_RULE_SET)
-    assert semantic.BUILDER_PRODUCTION_SET
-    assert all(isinstance(item, Production) for item in semantic.BUILDER_PRODUCTION_SET)
+    # The lists are gone. The seeded cache still constructs both kinds.
+    assert not hasattr(typecheck, 'COMMON_RULE_SET')
+    assert not hasattr(semantic, 'BUILDER_PRODUCTION_SET')
+    cache = build_cache()
+    common = ConformanceChecker(
+        {},
+        cache,
+        'common.',
+        COMPILER_PROVISION_CACHE_PREFIX,
+    ).provisions
+    productions = SymbolTableBuilder(
+        cache,
+        COMPILER_PROVISION_CACHE_PREFIX,
+    ).productions
+    assert common
+    assert all(isinstance(item, Specification) for item in common)
+    assert productions
+    assert all(isinstance(item, Production) for item in productions)

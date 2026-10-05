@@ -19,10 +19,26 @@ from ...mappers.ast import (
     TypeAggregate,
 )
 from ..semantic import SymbolTableBuilder
-from ..typecheck import COMMON_RULE_SET, ConformanceChecker
+from ...blueprints.core import build_cache
+from ...contexts.provision import COMPILER_PROVISION_CACHE_PREFIX
+from ..typecheck import ConformanceChecker
 import compiler.utils.typecheck as typecheck
 
 # *** functions
+
+# ** function: _provision_cache
+def _provision_cache():
+    '''
+    Return one cache seeded by the compiler blueprint.
+
+    :return: The seeded cache.
+    :rtype: Any
+    '''
+
+    # Dialect tests read the seed. They do not rebuild the deleted lists.
+    if not hasattr(_provision_cache, 'cache'):
+        _provision_cache.cache = build_cache()
+    return _provision_cache.cache
 
 # ** function: _module
 def _module(code: list) -> DeclarationAggregate:
@@ -329,11 +345,14 @@ def _codes(module: DeclarationAggregate) -> list:
     '''
 
     # Typing lookup reads the live registry, not the dumped build dict.
-    builder = SymbolTableBuilder()
+    cache = _provision_cache()
+    builder = SymbolTableBuilder(cache, COMPILER_PROVISION_CACHE_PREFIX)
     builder.build(module)
     findings = ConformanceChecker(
-        scopes=builder.scopes,
-        rule_set=COMMON_RULE_SET,
+        builder.scopes,
+        cache,
+        'common.',
+        COMPILER_PROVISION_CACHE_PREFIX,
     ).check(module)
     return [item['error_code'] for item in findings]
 
@@ -759,7 +778,12 @@ def test_checker_uses_apply_provisions() -> None:
         seen.append((visit, context.group_name))
         return []
 
-    checker = ConformanceChecker(scopes={}, rule_set=[])
+    checker = ConformanceChecker(
+        {},
+        _provision_cache(),
+        'missing.',
+        COMPILER_PROVISION_CACHE_PREFIX,
+    )
     checker.apply_provisions = _record
     group = _group('imports', [
         _import_section('core', []),
@@ -785,7 +809,12 @@ def test_checker_missing_module_scope_returns_empty() -> None:
             _import_section('vendor', [_import('yaml')]),
         ]),
     ])
-    checker = ConformanceChecker(scopes={}, rule_set=COMMON_RULE_SET)
+    checker = ConformanceChecker(
+        {},
+        _provision_cache(),
+        'common.',
+        COMPILER_PROVISION_CACHE_PREFIX,
+    )
 
     # A missing module scope returns before the walk.
     assert checker.check(module) == []
@@ -796,13 +825,20 @@ def test_no_type_checker_class() -> None:
     Test that compiler.utils.typecheck does not define TypeChecker.
     '''
 
-    # The walker is ConformanceChecker. Dialect variation is a rule-set constant.
+    # The walker is ConformanceChecker. The common list is gone.
     assert not hasattr(typecheck, 'TypeChecker')
+    assert not hasattr(typecheck, 'COMMON_RULE_SET')
 
-    # The common rule set is exactly the eight rows, in order.
+    # The common selector attaches exactly the eight rows, in cache order.
+    checker = ConformanceChecker(
+        {},
+        _provision_cache(),
+        'common.',
+        COMPILER_PROVISION_CACHE_PREFIX,
+    )
     assert [
         (spec.id, spec.applies_to, type(spec).__name__)
-        for spec in typecheck.COMMON_RULE_SET
+        for spec in checker.provisions
     ] == [
         ('common.import_group', 'artifact_header', 'ImportGroupSpecification'),
         ('common.section_class_name', 'artifact_header', 'SectionClassNameSpecification'),

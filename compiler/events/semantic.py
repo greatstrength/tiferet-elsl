@@ -19,13 +19,15 @@ class PerformSemanticAnalysis(DomainEvent):
     Turn a parsed module AST into the symbol table and name resolution a later pass can consume.
 
     The event runs the symbol-table builder, then the name resolver. It does not
-    own scope construction, and it does not print findings.
+    own scope construction, and it does not print findings or seed the cache.
     '''
 
     # * method: execute
-    @DomainEvent.parameters_required(['ast'])
+    @DomainEvent.parameters_required(['ast', 'cache', 'provision_prefix'])
     def execute(self,
             ast: Decl,
+            cache: Any,
+            provision_prefix: tuple,
             source_file: str = None,
             **kwargs,
         ) -> Dict[str, Any]:
@@ -34,11 +36,15 @@ class PerformSemanticAnalysis(DomainEvent):
 
         :param ast: The parsed module declaration.
         :type ast: Decl
+        :param cache: The merged provision cache. This event does not build one.
+        :type cache: Any
+        :param provision_prefix: The namespace prefix the caller passes.
+        :type provision_prefix: tuple
         :param source_file: Accepted for the emitter. Unused by this event.
         :type source_file: str
         :param kwargs: Additional keyword arguments.
         :type kwargs: dict
-        :return: The symbol table and dumped resolution.
+        :return: The symbol table, dumped resolution, and provision findings.
         :rtype: Dict[str, Any]
         '''
 
@@ -54,15 +60,16 @@ class PerformSemanticAnalysis(DomainEvent):
         )
 
         # Build the symbol table, then resolve names against the live scopes.
-        builder = SymbolTableBuilder()
+        builder = SymbolTableBuilder(cache, provision_prefix)
         symbol_table = builder.build(ast)
         resolver = NameResolver(builder.scopes)
         resolution = resolver.resolve(ast)
 
-        # Return dumped scopes and the resolution dump.
+        # Return dumped scopes, the resolution dump, and instantiation findings.
         return {
             'symbol_table': symbol_table,
             'resolution': resolution.model_dump(exclude_none=True),
+            'provision_findings': list(builder.provision_findings),
         }
 
 # ** event: emit_semantic_result

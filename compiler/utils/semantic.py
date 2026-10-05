@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 
 # ** app
 from ..mappers import (
+    PROVISION_KIND_PRODUCTION,
     SYMBOL_KIND_ATTRIBUTE,
     SYMBOL_KIND_CLASS_DEF,
     SYMBOL_KIND_IMPORT,
@@ -29,6 +30,7 @@ from .core import (
     ProductionContext,
     StatementWalker,
 )
+from .provision import collect_owned_provisions
 
 # *** classes
 
@@ -371,34 +373,6 @@ class SelfAttrProduction(Production):
 
 # *** constants
 
-# ** constant: builder_production_set
-BUILDER_PRODUCTION_SET: List[Production] = [
-    ImportFromProduction(
-        id='builder.import_from',
-        applies_to='import_from',
-    ),
-    ImportProduction(
-        id='builder.import',
-        applies_to='import',
-    ),
-    ClassDeclProduction(
-        id='builder.class_decl',
-        applies_to='class_decl',
-    ),
-    FuncDeclProduction(
-        id='builder.func_decl',
-        applies_to='func_decl',
-    ),
-    AttrDeclProduction(
-        id='builder.attr_decl',
-        applies_to='attr_decl',
-    ),
-    SelfAttrAssignProduction(
-        id='builder.self_attr_assign',
-        applies_to='expression',
-    ),
-]
-
 # ** constant: resolver_production_set
 RESOLVER_PRODUCTION_SET: List[Production] = [
     NameProduction(
@@ -424,23 +398,31 @@ class SymbolTableBuilder(StatementWalker):
     # * attribute: productions
     productions: List[Production]
 
-    # * init
-    def __init__(self, productions: Optional[List[Production]] = None) -> None:
-        '''
-        Store the builder productions and start from an empty scope registry.
+    # * attribute: provision_findings
+    provision_findings: List[dict]
 
-        :param productions: The productions to attach, or None for the builder set.
-        :type productions: Optional[List[Production]]
+    # * init
+    def __init__(self, cache, provision_prefix: tuple) -> None:
+        '''
+        Read builder productions from the merged cache and start empty.
+
+        :param cache: The cache whose provision namespace is read once.
+        :type cache: Any
+        :param provision_prefix: The namespace prefix the caller passes.
+        :type provision_prefix: tuple
         :return: None
         :rtype: None
         '''
 
-        # Default to the builder set without copying it.
-        self.productions = (
-            productions if productions is not None else BUILDER_PRODUCTION_SET
+        # Read the namespace once. build does not read it again.
+        rows = cache.get_by_prefix(*provision_prefix)
+        self.productions, self.provision_findings = collect_owned_provisions(
+            rows,
+            owned_prefix='builder.',
+            kind=PROVISION_KIND_PRODUCTION,
         )
 
-        # The provision list is the production list. The walk starts empty.
+        # The provision list is the successful productions. The walk starts empty.
         super().__init__(scopes={}, provisions=self.productions)
 
     # * method: build
