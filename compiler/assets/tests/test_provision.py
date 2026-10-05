@@ -10,11 +10,15 @@ from importlib import import_module
 from pathlib import Path
 
 # ** app
-from ..provision import COMPILER_DEFAULT_PROVISIONS, create_default_provision_data
+from compiler.assets.core import create_default_provision_data
+from ..provision import COMPILER_DEFAULT_PROVISIONS
 from compiler.utils.core import Specification
 from compiler.utils.semantic import Production
 
 # *** constants
+
+# ** constant: core_path
+_CORE_PATH = Path(__file__).resolve().parent.parent / 'core.py'
 
 # ** constant: provision_path
 _PROVISION_PATH = Path(__file__).resolve().parent.parent / 'provision.py'
@@ -760,7 +764,7 @@ def test_catalog_values_contain_no_callable() -> None:
 # ** test: create_default_provision_data_omits_id
 def test_create_default_provision_data_omits_id() -> None:
     '''
-    Test that the factory omits id and returns a fresh dict.
+    Test that the core factory omits id and returns a fresh dict.
     '''
 
     # The id is the group-dict key, not a factory parameter.
@@ -797,15 +801,19 @@ def test_provision_source_stays_dependency_light() -> None:
     Test that the catalog module does not name excluded sources or imports.
     '''
 
-    # Read the catalog module source.
+    # Read the catalog and the core factory module.
     source = _PROVISION_PATH.read_text(encoding='utf-8')
+    core_source = _CORE_PATH.read_text(encoding='utf-8')
     tree = ast.parse(source)
+    core_tree = ast.parse(core_source)
 
-    # Preamble order is imports, constants, then functions.
+    # The catalog is constants after imports. The factory module is functions after imports.
     assert source.index('# *** imports') < source.index('# *** constants')
-    assert source.index('# *** constants') < source.index('# *** functions')
+    assert '# *** functions' not in source
+    assert core_source.index('# *** imports') < core_source.index('# *** functions')
+    assert '# *** constants' not in core_source
 
-    # The module defines the factory and the catalog, and no class.
+    # The catalog names the group dict. The factory is defined in core, not here.
     assigned = {
         target.id
         for node in ast.walk(tree)
@@ -813,36 +821,47 @@ def test_provision_source_stays_dependency_light() -> None:
         for target in node.targets
         if isinstance(target, ast.Name)
     }
-    assert 'create_default_provision_data' in {
-        node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
+    core_functions = {
+        node.name for node in ast.walk(core_tree) if isinstance(node, ast.FunctionDef)
     }
     assert assigned == {'COMPILER_DEFAULT_PROVISIONS'}
+    assert not any(isinstance(node, ast.FunctionDef) for node in ast.walk(tree))
+    assert core_functions == {'create_default_provision_data'}
     assert not any(isinstance(node, ast.ClassDef) for node in ast.walk(tree))
+    assert not any(isinstance(node, ast.ClassDef) for node in ast.walk(core_tree))
     assert not any(
         name.endswith('_RULE_SET') or name.endswith('_PRODUCTION_SET')
         for name in assigned
     )
 
     # Excluded constructions are not named, even as comments.
-    for name in _FORBIDDEN_NAMES:
-        assert re.search(
-            r'(?<![A-Za-z0-9_.])' + re.escape(name) + r'(?![A-Za-z0-9_])',
-            source,
-        ) is None
+    for scanned in (source, core_source):
+        for name in _FORBIDDEN_NAMES:
+            assert re.search(
+                r'(?<![A-Za-z0-9_.])' + re.escape(name) + r'(?![A-Za-z0-9_])',
+                scanned,
+            ) is None
 
-    # Import lines do not name the packages this module must not load.
+    # Import lines do not name the packages these modules must not load.
     import_lines = [
         line.strip()
         for line in source.splitlines()
         if line.strip().startswith(('import ', 'from '))
     ]
-    assert import_lines == ['from typing import Any, Dict']
-    for line in import_lines:
+    core_import_lines = [
+        line.strip()
+        for line in core_source.splitlines()
+        if line.strip().startswith(('import ', 'from '))
+    ]
+    assert import_lines == ['from .core import create_default_provision_data']
+    assert core_import_lines == ['from typing import Any, Dict']
+    for line in import_lines + core_import_lines:
         for forbidden in _FORBIDDEN_IMPORTS:
             assert forbidden not in line
 
-    # The module source does not open a file.
+    # Neither module source opens a file.
     assert 'open(' not in source
+    assert 'open(' not in core_source
 
 # ** test: assets_package_does_not_bind_provisions
 def test_assets_package_does_not_bind_provisions() -> None:
@@ -852,7 +871,8 @@ def test_assets_package_does_not_bind_provisions() -> None:
 
     # The package import resolves the module. The dict stays on the module.
     import compiler.assets as assets
-    from compiler.assets import provision
+    from compiler.assets import core, provision
 
     assert provision.COMPILER_DEFAULT_PROVISIONS is COMPILER_DEFAULT_PROVISIONS
+    assert core.create_default_provision_data is create_default_provision_data
     assert not hasattr(assets, 'COMPILER_DEFAULT_PROVISIONS')
