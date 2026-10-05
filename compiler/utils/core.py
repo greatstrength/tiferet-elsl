@@ -16,7 +16,6 @@ from ..mappers import (
     ExprKind,
     Expression,
     Provision,
-    Rewrite,
     ScopeAggregate,
     Specification,
     Statement,
