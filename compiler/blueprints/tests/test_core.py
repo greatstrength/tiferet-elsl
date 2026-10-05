@@ -318,6 +318,9 @@ def test_root_cache_does_not_override_seeds() -> None:
 def test_build_cache_does_not_open_or_import(monkeypatch) -> None:
     '''
     Test that seeding does not open a file or import a provision class.
+
+    :param monkeypatch: The pytest monkeypatch fixture.
+    :type monkeypatch: object
     '''
 
     # Fail closed if the seed reaches for a file or a behavior module.
