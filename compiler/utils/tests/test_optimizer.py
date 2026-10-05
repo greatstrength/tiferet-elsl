@@ -6,7 +6,7 @@
 import yaml
 
 # ** app
-from ..mappers import Rewrite
+from ...mappers import Rewrite
 from ..optimizer import (
     OPTIMIZER_CALLABLE_APPLIES_TO,
     OPTIMIZER_CALLABLE_ID,
