@@ -61,7 +61,8 @@ class ASTPrinter:
     @staticmethod
     def print_ast(decl: Declaration, indent: int = 0) -> None:
         '''
-        Print a declaration after its body, value, and type.
+        Visit the declaration body, then its value and type, and print the
+        indent plus describe().
 
         :param decl: The declaration to print.
         :type decl: Declaration
@@ -73,34 +74,25 @@ class ASTPrinter:
 
         # Visit body statements before the declaration line.
         for stmt in decl.code:
-            ASTPrinter.print_statement(stmt, indent + 1)
+            ASTPrinter.print_statement(stmt, indent=indent + 1)
 
         # Visit an initializer when the declaration has one.
         if decl.value:
-            ASTPrinter.print_expression(decl.value, indent + 1)
+            ASTPrinter.print_expression(decl.value, indent=indent + 1)
 
         # Visit the declaration type when it is set.
         if decl.type:
-            ASTPrinter.print_type(decl.type, indent + 1)
+            ASTPrinter.print_type(decl.type, indent=indent + 1)
 
-        # Format the optional type and truncated docstring suffixes.
-        prefix = '  ' * indent
-        type_str = f' : {ASTPrinter._token(decl.type.kind)}' if decl.type else ''
-        doc_str = ''
-        if decl.doc_string:
-            doc = decl.doc_string
-            if len(doc) > 40:
-                doc = doc[:40] + '...'
-            doc_str = f' doc="{doc}"'
-
-        # Print the declaration after its children.
-        print(f'{prefix}[Declaration] name={decl.name}{type_str}{doc_str}')
+        # Print the indent plus this declaration's own line.
+        print('  ' * indent + decl.describe())
 
     # * method: print_statement (static)
     @staticmethod
     def print_statement(stmt: Statement, indent: int = 0) -> None:
         '''
-        Print a statement after its bodies, declaration, and expressions.
+        Visit the body and else body, then the declaration and expressions,
+        and print the indent plus describe().
 
         :param stmt: The statement to print.
         :type stmt: Statement
@@ -112,29 +104,29 @@ class ASTPrinter:
 
         # Visit body children, then else-body children.
         for child in stmt.body:
-            ASTPrinter.print_statement(child, indent + 1)
+            ASTPrinter.print_statement(child, indent=indent + 1)
         for child in stmt.else_body:
-            ASTPrinter.print_statement(child, indent + 1)
+            ASTPrinter.print_statement(child, indent=indent + 1)
 
         # Visit a nested declaration when the statement carries one.
         if stmt.decl:
-            ASTPrinter.print_ast(stmt.decl, indent + 1)
+            ASTPrinter.print_ast(stmt.decl, indent=indent + 1)
 
         # Visit the initializer expression, then the primary expression.
         if stmt.init_expr:
-            ASTPrinter.print_expression(stmt.init_expr, indent + 1)
+            ASTPrinter.print_expression(stmt.init_expr, indent=indent + 1)
         if stmt.expr:
-            ASTPrinter.print_expression(stmt.expr, indent + 1)
+            ASTPrinter.print_expression(stmt.expr, indent=indent + 1)
 
-        # Print the statement after its children.
-        prefix = '  ' * indent
-        print(f'{prefix}[Statement] kind={ASTPrinter._token(stmt.kind)}')
+        # Print the indent plus this statement's own line.
+        print('  ' * indent + stmt.describe())
 
     # * method: print_expression (static)
     @staticmethod
     def print_expression(expr: Expression, indent: int = 0) -> None:
         '''
-        Print an expression after its left and right children.
+        Visit the left child, then the right child, and print the indent plus
+        describe().
 
         :param expr: The expression to print.
         :type expr: Expression
@@ -146,23 +138,19 @@ class ASTPrinter:
 
         # Visit the left child, then the right child.
         if expr.left:
-            ASTPrinter.print_expression(expr.left, indent + 1)
+            ASTPrinter.print_expression(expr.left, indent=indent + 1)
         if expr.right:
-            ASTPrinter.print_expression(expr.right, indent + 1)
+            ASTPrinter.print_expression(expr.right, indent=indent + 1)
 
-        # Format optional name and value suffixes.
-        prefix = '  ' * indent
-        name = f' name={expr.name}' if expr.name else ''
-        val = f' value={expr.value}' if expr.value else ''
-
-        # Print the expression after its children.
-        print(f'{prefix}[Expression] kind={ASTPrinter._token(expr.kind)}{name}{val}')
+        # Print the indent plus this expression's own line.
+        print('  ' * indent + expr.describe())
 
     # * method: print_type (static)
     @staticmethod
     def print_type(type_node: Type, indent: int = 0) -> None:
         '''
-        Print a type after its subtype, return type, and parameters.
+        Visit the subtype, return type, and parameters, and print the indent
+        plus describe().
 
         :param type_node: The type to print.
         :type type_node: Type
@@ -174,24 +162,23 @@ class ASTPrinter:
 
         # Visit the subtype, then the return type.
         if type_node.subtype:
-            ASTPrinter.print_type(type_node.subtype, indent + 1)
+            ASTPrinter.print_type(type_node.subtype, indent=indent + 1)
         if type_node.return_type:
-            ASTPrinter.print_type(type_node.return_type, indent + 1)
+            ASTPrinter.print_type(type_node.return_type, indent=indent + 1)
 
         # Visit parameters when the type carries them.
         if type_node.params:
-            ASTPrinter.print_param_list(type_node.params, indent + 1)
+            ASTPrinter.print_param_list(type_node.params, indent=indent + 1)
 
-        # Print the type after its children.
-        prefix = '  ' * indent
-        name = f' name={type_node.name}' if type_node.name else ''
-        print(f'{prefix}[Type] kind={ASTPrinter._token(type_node.kind)}{name}')
+        # Print the indent plus this type's own line.
+        print('  ' * indent + type_node.describe())
 
     # * method: print_param_list (static)
     @staticmethod
     def print_param_list(params: List[ParamList], indent: int = 0) -> None:
         '''
-        Print each parameter after its default and type.
+        Visit each parameter's default and type, then print that parameter's
+        indent plus describe().
 
         :param params: The parameters to print.
         :type params: List[ParamList]
@@ -204,22 +191,20 @@ class ASTPrinter:
         # Visit each parameter's default and type before its own line.
         for param in params:
             if param.default:
-                ASTPrinter.print_expression(param.default, indent + 1)
+                ASTPrinter.print_expression(param.default, indent=indent + 1)
             if param.type:
-                ASTPrinter.print_type(param.type, indent + 1)
+                ASTPrinter.print_type(param.type, indent=indent + 1)
 
-            # Requiredness is a suffix, not a separate node.
-            prefix = '  ' * indent
-            req = ' required' if param.required else ' optional'
-            print(f'{prefix}[Param] name={param.name}{req}')
+            # Print the indent plus this parameter's own line.
+            print('  ' * indent + param.describe())
 
     # * method: print_symbol_table (static)
     @staticmethod
     def print_symbol_table(symbol_table: Dict[str, Any]) -> None:
         '''
-        Print a dumped or live symbol table to stdout.
+        Print a dumped symbol table to stdout.
 
-        :param symbol_table: The symbol table, including module name and scopes.
+        :param symbol_table: The dumped mapping, including module name and scopes.
         :type symbol_table: Dict[str, Any]
         :return: None
         :rtype: None
