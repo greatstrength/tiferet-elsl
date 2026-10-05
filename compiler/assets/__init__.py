@@ -8,3 +8,6 @@ from . import error
 from . import grammar
 from . import production
 from . import token
+from . import app
+from . import feature
+from . import cli

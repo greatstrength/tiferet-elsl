@@ -3,15 +3,14 @@
 # *** imports
 
 # ** core
-from importlib.resources import files
 from pathlib import Path
 from typing import List
 
-# ** infra
-import yaml
-
 # ** app
 import compiler
+from ..assets.app import COMPILER_DEFAULT_APP_SESSIONS
+from ..assets.cli import COMPILER_DEFAULT_COMMANDS
+from ..assets.feature import COMPILER_DEFAULT_FEATURES
 from ..domain.ast import ParamList, Statement, Type
 from ..events.typecheck import CheckDomainConformance
 from ..mappers.artifact import (
@@ -59,30 +58,25 @@ def test_cli_command_surface():
     Test that the CLI names only the five frozen module commands.
     '''
 
-    # Load the command document. Do not construct a parser.
-    cli_path = Path(__file__).resolve().parent.parent / 'assets' / 'cli.yml'
-    commands = yaml.safe_load(cli_path.read_text(encoding='utf-8'))['cli']['cmds']
-
-    # Feature ids are group_key.key. Order is the document order.
-    found = []
-    for group_key, group in commands.items():
-        for key, command in group.items():
-            found.append((group_key, key, f'{group_key}.{key}'))
-            assert command['group_key'] == group_key
-            assert command['key'] == key
-
-    # Exactly the frozen commands. Retired event commands are absent.
+    # Command ids are the catalog keys. Order is the document order.
+    found = list(COMPILER_DEFAULT_COMMANDS)
     assert found == [
-        ('scan', 'module', 'scan.module'),
-        ('parse', 'module', 'parse.module'),
-        ('semantic', 'module', 'semantic.module'),
-        ('compile', 'module', 'compile.module'),
-        ('compile', 'ast', 'compile.ast'),
+        'scan.module',
+        'parse.module',
+        'semantic.module',
+        'compile.module',
+        'compile.ast',
     ]
-    assert 'event' not in commands.get('scan', {})
-    assert 'event' not in commands.get('compile', {})
-    assert 'scan.event' not in [item[2] for item in found]
-    assert 'compile.event' not in [item[2] for item in found]
+
+    # Each value's group_key and key are that split.
+    for command_id, command in COMPILER_DEFAULT_COMMANDS.items():
+        group_key, key = command_id.split('.', 1)
+        assert command['group_key'] == group_key
+        assert command['key'] == key
+
+    # Retired event commands are absent.
+    assert 'scan.event' not in COMPILER_DEFAULT_COMMANDS
+    assert 'compile.event' not in COMPILER_DEFAULT_COMMANDS
 
 # ** test: component_choices
 def test_component_choices():
@@ -90,9 +84,7 @@ def test_component_choices():
     Test that semantic-bearing commands require the ten component choices.
     '''
 
-    # Load commands without booting the CLI.
-    cli_path = Path(__file__).resolve().parent.parent / 'assets' / 'cli.yml'
-    commands = yaml.safe_load(cli_path.read_text(encoding='utf-8'))['cli']['cmds']
+    # Read arguments from the command catalog. Do not construct a parser.
     choices = [
         'assets',
         'blueprints',
@@ -107,13 +99,13 @@ def test_component_choices():
     ]
 
     # semantic.module and both compile commands require -c / --component.
-    for group_key, key in (
-        ('semantic', 'module'),
-        ('compile', 'module'),
-        ('compile', 'ast'),
+    for command_id in (
+        'semantic.module',
+        'compile.module',
+        'compile.ast',
     ):
         matches = [
-            arg for arg in commands[group_key][key]['args']
+            arg for arg in COMPILER_DEFAULT_COMMANDS[command_id]['arguments']
             if '-c' in (arg.get('name_or_flags') or [])
             and '--component' in (arg.get('name_or_flags') or [])
         ]
@@ -124,36 +116,14 @@ def test_component_choices():
 # ** test: session_and_asset_files
 def test_session_and_asset_files():
     '''
-    Test that sessions, const keys, and packaged YAML basenames are frozen.
+    Test that the frozen session ids are the application catalog keys.
     '''
 
-    # Load the pipeline document without booting the app.
-    config_path = Path(__file__).resolve().parent.parent / 'assets' / 'config.yml'
-    config = yaml.safe_load(config_path.read_text(encoding='utf-8'))
-
-    # The two app sessions are the frozen session ids.
-    assert set(config['sessions']) == {'compiler', 'compiler_cli'}
-    assert set(config['sessions']['compiler_cli']['const']) == {
-        'cli_config',
-        'di_config',
-        'feature_config',
-        'error_config',
-        'logging_config',
-    }
-    assert set(config['const']) == {
-        'token_config',
-        'grammar_config',
-        'production_config',
-    }
-
-    # The three remaining YAML basenames are package data, not loose repo files only.
-    packaged = files('compiler').joinpath('assets')
-    for name in (
-        'config.yml',
-        'feature.yml',
-        'cli.yml',
-    ):
-        assert packaged.joinpath(name).is_file()
+    # The two app sessions are the frozen session ids, in document order.
+    assert list(COMPILER_DEFAULT_APP_SESSIONS) == [
+        'compiler',
+        'compiler_cli',
+    ]
 
 # ** test: codegen_envelope_keys
 def test_codegen_envelope_keys():
@@ -321,12 +291,9 @@ def test_findings_accumulate():
     '''
 
     # Conformance steps share the findings data key.
-    feature_path = Path(__file__).resolve().parent.parent / 'assets' / 'feature.yml'
-    features = yaml.safe_load(feature_path.read_text(encoding='utf-8'))['features']
     steps = []
-    for group in features.values():
-        for feature in group.values():
-            steps.extend(feature.get('steps') or [])
+    for feature in COMPILER_DEFAULT_FEATURES.values():
+        steps.extend(feature.get('steps') or [])
     conformance = [
         step for step in steps
         if str(step.get('service_id', '')).startswith('check_')
