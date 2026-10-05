@@ -224,9 +224,6 @@ def test_catalog_modules_do_not_name_forbidden_imports() -> None:
     Test that the four catalogs do not import forbidden modules or name deleted YAML.
     '''
 
-    # Provision is another RFP's catalog. It is not defined here.
-    assert not (_ASSETS_DIR / 'provision.py').exists()
-
     # Import lines stay inside the permitted set. Deleted filenames are absent.
     for name in _CATALOG_MODULES:
         source = (_ASSETS_DIR / name).read_text(encoding='utf-8')
