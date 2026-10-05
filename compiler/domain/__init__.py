@@ -39,4 +39,17 @@ from .semantic import (
     UnresolvedName,
     ResolutionResult,
 )
+from .provision import (
+    PROVISION_KIND_PRODUCTION,
+    PROVISION_KIND_REWRITE,
+    PROVISION_KIND_SPECIFICATION,
+    AllOf,
+    AnyOf,
+    Not,
+    Production,
+    Provision,
+    ProvisionRegistration,
+    Rewrite,
+    Specification,
+)
 from .typecheck import TypeCheckError

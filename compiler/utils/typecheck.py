@@ -459,8 +459,8 @@ class ConformanceChecker(StatementWalker):
         :rtype: None
         '''
 
-        # The attachment list is the rule set. The walk starts with no findings.
-        super().__init__(scopes=scopes, attachments=rule_set)
+        # The provision list is the rule set. The walk starts with no findings.
+        super().__init__(scopes=scopes, provisions=rule_set)
         self.rule_set = rule_set
         self._finding_collection = TypeErrorCollection()
         self._group_stack = []
@@ -518,7 +518,7 @@ class ConformanceChecker(StatementWalker):
 
         # Record each finding against the current scope, or the module path.
         scope_path = self.current_scope.path if self.scope_stack else 'module'
-        for result in self.apply_attachments(visit, candidate, context):
+        for result in self.apply_provisions(visit, candidate, context):
             for finding in result or []:
                 self._finding_collection.add(scope_path=scope_path, **finding)
 
