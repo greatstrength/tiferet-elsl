@@ -9,10 +9,31 @@ from pathlib import Path
 import pytest
 
 # ** app
+from ...blueprints.core import build_cache
+from ...contexts.provision import COMPILER_PROVISION_CACHE_PREFIX
 from ..semantic import EmitSemanticResult, PerformSemanticAnalysis
 from ..settings import DomainEvent, TiferetError
 from ...domain.semantic import SYMBOL_KIND_CLASS_DEF
 from ...mappers import Decl, Expr, Stmt
+
+# *** functions
+
+# ** function: _provision_kwargs
+def _provision_kwargs() -> dict:
+    '''
+    Return the cache and prefix semantic analysis now requires.
+
+    :return: Keyword arguments for the analysis event.
+    :rtype: dict
+    '''
+
+    # The event does not seed a cache. The test supplies one.
+    if not hasattr(_provision_kwargs, 'cache'):
+        _provision_kwargs.cache = build_cache()
+    return {
+        'cache': _provision_kwargs.cache,
+        'provision_prefix': COMPILER_PROVISION_CACHE_PREFIX,
+    }
 
 # *** fixtures
 
@@ -85,11 +106,13 @@ def test_perform_semantic_analysis_returns_symbol_table_and_resolution(
         PerformSemanticAnalysis,
         ast=sample_module,
         source_file='events.py',
+        **_provision_kwargs(),
     )
 
     # The result names the module and includes both required tables.
     assert 'symbol_table' in result
     assert 'resolution' in result
+    assert result['provision_findings'] == []
     assert result['symbol_table']['module_name'] == 'events'
     assert 'scopes' in result['symbol_table']
     assert 'module' in result['symbol_table']['scopes']
@@ -109,6 +132,7 @@ def test_perform_semantic_analysis_registers_class_in_module_scope(
     result = DomainEvent.handle(
         PerformSemanticAnalysis,
         ast=sample_module,
+        **_provision_kwargs(),
     )
 
     # The class is a class definition in the module scope.
@@ -126,6 +150,7 @@ def test_perform_semantic_analysis_rejects_invalid_ast() -> None:
         DomainEvent.handle(
             PerformSemanticAnalysis,
             ast='not-a-decl',
+            **_provision_kwargs(),
         )
 
     # The verify code is the string. Catalog registration is a later story.

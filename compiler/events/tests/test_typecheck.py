@@ -33,23 +33,44 @@ from ...mappers.ast import (
     StatementAggregate,
     TypeAggregate,
 )
+from ...blueprints.core import build_cache
+from ...contexts.provision import COMPILER_PROVISION_CACHE_PREFIX
 from ...utils.semantic import SymbolTableBuilder
-from ...utils.typecheck import (
-    ASSET_RULE_SET,
-    BLUEPRINTS_RULE_SET,
-    COMMON_RULE_SET,
-    CONTEXTS_RULE_SET,
-    DI_RULE_SET,
-    DOMAIN_RULE_SET,
-    EVENT_RULE_SET,
-    INTERFACE_RULE_SET,
-    MAPPER_RULE_SET,
-    REPOS_RULE_SET,
-    UTILS_RULE_SET,
-)
 import compiler.events.typecheck as typecheck
 
 # *** functions
+
+# ** function: _provision_cache
+def _provision_cache():
+    '''
+    Return one cache seeded by the compiler blueprint.
+
+    :return: The seeded cache.
+    :rtype: Any
+    '''
+
+    # Event tests pass the seed. They do not rebuild the deleted lists.
+    if not hasattr(_provision_cache, 'cache'):
+        _provision_cache.cache = build_cache()
+    return _provision_cache.cache
+
+# ** function: _handle
+def _handle(event_cls, **kwargs):
+    '''
+    Invoke a conformance event with the required cache and prefix.
+
+    :param event_cls: The event class.
+    :type event_cls: type
+    :param kwargs: The event keyword arguments.
+    :type kwargs: dict
+    :return: The event result.
+    :rtype: Any
+    '''
+
+    # A missing cache is not a second seed. These tests supply one.
+    kwargs.setdefault('cache', _provision_cache())
+    kwargs.setdefault('provision_prefix', COMPILER_PROVISION_CACHE_PREFIX)
+    return DomainEvent.handle(event_cls, **kwargs)
 
 # ** function: _decl
 def _decl(decl) -> StatementAggregate:
@@ -250,7 +271,10 @@ def _semantic(ast: DeclarationAggregate) -> dict:
 
     # The event reconstructs scopes from the dumped build dict.
     return {
-        'symbol_table': SymbolTableBuilder().build(ast),
+        'symbol_table': SymbolTableBuilder(
+            _provision_cache(),
+            COMPILER_PROVISION_CACHE_PREFIX,
+        ).build(ast),
     }
 
 # ** function: _codes
@@ -280,7 +304,7 @@ def test_check_common_conformance_seeds_findings() -> None:
     semantic = _semantic(ast)
 
     # Invoke the event only through the domain event handler.
-    findings = DomainEvent.handle(
+    findings = _handle(
         CheckCommonConformance,
         ast=ast,
         semantic=semantic,
@@ -299,7 +323,7 @@ def test_check_common_conformance_requires_ast() -> None:
 
     # A present semantic value does not satisfy the missing ast parameter.
     with pytest.raises(TiferetError) as exc_info:
-        DomainEvent.handle(
+        _handle(
             CheckCommonConformance,
             semantic=_semantic(_fail_ping()),
         )
@@ -319,7 +343,7 @@ def test_check_event_conformance_detects_missing_execute() -> None:
     semantic = _semantic(ast)
 
     # Invoke the event only through the domain event handler.
-    findings = DomainEvent.handle(
+    findings = _handle(
         CheckEventConformance,
         ast=ast,
         semantic=semantic,
@@ -347,7 +371,7 @@ def test_check_event_conformance_accumulates_prior_findings() -> None:
     }]
 
     # Invoke the event only through the domain event handler.
-    findings = DomainEvent.handle(
+    findings = _handle(
         CheckEventConformance,
         ast=ast,
         semantic=semantic,
@@ -371,6 +395,8 @@ def test_findings_accumulate_in_declaration_order() -> None:
         'ast': ast,
         'semantic': semantic,
         'component': 'events',
+        'cache': _provision_cache(),
+        'provision_prefix': COMPILER_PROVISION_CACHE_PREFIX,
     })
     feature = FeatureContext(get_dependency=lambda *args, **kwargs: None)
 
@@ -394,35 +420,36 @@ def test_findings_accumulate_in_declaration_order() -> None:
         'EVENT_MISSING_EXECUTE',
     ]
 
-# ** test: check_star_conformance_binds_named_rule_set
-@pytest.mark.parametrize('event_cls,rule_set_constant', [
-    (CheckCommonConformance, COMMON_RULE_SET),
-    (CheckEventConformance, EVENT_RULE_SET),
-    (CheckAssetConformance, ASSET_RULE_SET),
-    (CheckDomainConformance, DOMAIN_RULE_SET),
-    (CheckMapperConformance, MAPPER_RULE_SET),
-    (CheckInterfaceConformance, INTERFACE_RULE_SET),
-    (CheckDIConformance, DI_RULE_SET),
-    (CheckUtilsConformance, UTILS_RULE_SET),
-    (CheckContextsConformance, CONTEXTS_RULE_SET),
-    (CheckBlueprintsConformance, BLUEPRINTS_RULE_SET),
-    (CheckReposConformance, REPOS_RULE_SET),
+# ** test: check_star_conformance_binds_selector
+@pytest.mark.parametrize('event_cls,selector', [
+    (CheckCommonConformance, 'common.'),
+    (CheckEventConformance, 'event.'),
+    (CheckAssetConformance, 'asset.'),
+    (CheckDomainConformance, 'domain.'),
+    (CheckMapperConformance, 'mapper.'),
+    (CheckInterfaceConformance, 'interface.'),
+    (CheckDIConformance, 'di.'),
+    (CheckUtilsConformance, 'utils.'),
+    (CheckContextsConformance, 'contexts.'),
+    (CheckBlueprintsConformance, 'blueprints.'),
+    (CheckReposConformance, 'repos.'),
 ])
-def test_check_star_conformance_binds_named_rule_set(
+def test_check_star_conformance_binds_selector(
         event_cls,
-        rule_set_constant,
+        selector: str,
     ) -> None:
     '''
-    Test that each conformance event binds its named rule-set constant.
+    Test that each conformance event binds its selector prefix.
 
     :param event_cls: The conformance event class.
     :type event_cls: type
-    :param rule_set_constant: The rule-set constant that class must bind.
-    :type rule_set_constant: list
+    :param selector: The owned id prefix, including the trailing dot.
+    :type selector: str
     '''
 
-    # Identity, not equality: the event must not copy the constant.
-    assert event_cls.rule_set is rule_set_constant
+    # The selector replaces the deleted rule-set constant.
+    assert event_cls.selector == selector
+    assert not hasattr(event_cls, 'rule_set')
 
 # ** test: dialect_event_execute_does_not_read_component
 def test_dialect_event_execute_does_not_read_component() -> None:
@@ -435,7 +462,7 @@ def test_dialect_event_execute_does_not_read_component() -> None:
     semantic = _semantic(ast)
 
     # Invoke the event only through the domain event handler.
-    findings = DomainEvent.handle(
+    findings = _handle(
         CheckEventConformance,
         ast=ast,
         semantic=semantic,

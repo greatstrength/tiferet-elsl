@@ -8,21 +8,7 @@ from typing import Any, ClassVar, Dict, List
 # ** app
 from ..mappers import Decl
 from ..mappers.semantic import ScopeAggregate
-from ..utils.core import Specification
-from ..utils.typecheck import (
-    ASSET_RULE_SET,
-    BLUEPRINTS_RULE_SET,
-    COMMON_RULE_SET,
-    CONTEXTS_RULE_SET,
-    DI_RULE_SET,
-    DOMAIN_RULE_SET,
-    EVENT_RULE_SET,
-    INTERFACE_RULE_SET,
-    MAPPER_RULE_SET,
-    REPOS_RULE_SET,
-    UTILS_RULE_SET,
-    ConformanceChecker,
-)
+from ..utils.typecheck import ConformanceChecker
 from .settings import DomainEvent, a
 
 # *** events
@@ -32,11 +18,12 @@ class ConformanceEvent(DomainEvent):
     '''
     Run one conformance rule set so findings can collect across a pipeline of events.
 
-    Behavior varies only by ``rule_set``. The event does not walk the AST itself.
+    Behavior varies only by ``selector``. The event does not walk the AST itself
+    and does not build the cache.
     '''
 
-    # * attribute: rule_set
-    rule_set: ClassVar[List[Specification]] = []
+    # * attribute: selector
+    selector: ClassVar[str] = ''
 
     # * method: build_scopes (static)
     @staticmethod
@@ -62,23 +49,33 @@ class ConformanceEvent(DomainEvent):
 
     # * method: run_rule_set
     def run_rule_set(self, ast: Decl, semantic: Dict[str, Any],
+            cache: Any, provision_prefix: tuple,
             findings: List[Dict] = None) -> List[Dict]:
         '''
-        Run this event's rule set and append its findings.
+        Run this event's selector and append its findings.
 
         :param ast: The module declaration to check.
         :type ast: Decl
         :param semantic: The semantic result, including the dumped symbol table.
         :type semantic: Dict[str, Any]
+        :param cache: The merged provision cache. This event does not build one.
+        :type cache: Any
+        :param provision_prefix: The namespace prefix the caller passes.
+        :type provision_prefix: tuple
         :param findings: Prior findings to prepend. None is an empty list.
         :type findings: List[Dict]
-        :return: Prior findings followed by this rule set's findings.
+        :return: Prior findings followed by this selector's findings.
         :rtype: List[Dict]
         '''
 
-        # One checker, bound to this event's rule set. Do not copy an attaches_to loop.
+        # One checker, bound to this event's selector. Do not copy an attaches_to loop.
         scopes = self.build_scopes(semantic)
-        checker = ConformanceChecker(scopes, self.rule_set)
+        checker = ConformanceChecker(
+            scopes,
+            cache,
+            self.selector,
+            provision_prefix,
+        )
         new_findings = checker.check(ast)
 
         # Append new findings. Do not mutate the caller's list.
@@ -92,14 +89,16 @@ class CheckCommonConformance(ConformanceEvent):
     This event is ungated. Later dialect events append to the list it starts.
     '''
 
-    # * attribute: rule_set
-    rule_set: ClassVar[List[Specification]] = COMMON_RULE_SET
+    # * attribute: selector
+    selector: ClassVar[str] = 'common.'
 
     # * method: execute
-    @DomainEvent.parameters_required(['ast', 'semantic'])
+    @DomainEvent.parameters_required(['ast', 'semantic', 'cache', 'provision_prefix'])
     def execute(self,
             ast: Decl,
             semantic: Dict[str, Any],
+            cache: Any,
+            provision_prefix: tuple,
             findings: List[Dict] = None,
             **kwargs,
         ) -> List[Dict]:
@@ -110,6 +109,10 @@ class CheckCommonConformance(ConformanceEvent):
         :type ast: Decl
         :param semantic: The semantic result, including the dumped symbol table.
         :type semantic: Dict[str, Any]
+        :param cache: The merged provision cache. This event does not build one.
+        :type cache: Any
+        :param provision_prefix: The namespace prefix the caller passes.
+        :type provision_prefix: tuple
         :param findings: Prior findings to prepend. None is an empty list.
         :type findings: List[Dict]
         :param kwargs: Middleware keyword arguments, such as logging, caching, and timing. Passed through and not consumed. ``component`` is not read.
@@ -118,8 +121,8 @@ class CheckCommonConformance(ConformanceEvent):
         :rtype: List[Dict]
         '''
 
-        # Delegate to the bound rule set. Leave kwargs for middleware.
-        return self.run_rule_set(ast, semantic, findings)
+        # Delegate to the bound selector. Leave kwargs for middleware.
+        return self.run_rule_set(ast, semantic, cache, provision_prefix, findings)
 
 # ** event: check_event_conformance
 class CheckEventConformance(ConformanceEvent):
@@ -130,14 +133,16 @@ class CheckEventConformance(ConformanceEvent):
     module kind. Gating is configuration, not logic in ``execute``.
     '''
 
-    # * attribute: rule_set
-    rule_set: ClassVar[List[Specification]] = EVENT_RULE_SET
+    # * attribute: selector
+    selector: ClassVar[str] = 'event.'
 
     # * method: execute
-    @DomainEvent.parameters_required(['ast', 'semantic'])
+    @DomainEvent.parameters_required(['ast', 'semantic', 'cache', 'provision_prefix'])
     def execute(self,
             ast: Decl,
             semantic: Dict[str, Any],
+            cache: Any,
+            provision_prefix: tuple,
             findings: List[Dict] = None,
             **kwargs,
         ) -> List[Dict]:
@@ -148,6 +153,10 @@ class CheckEventConformance(ConformanceEvent):
         :type ast: Decl
         :param semantic: The semantic result, including the dumped symbol table.
         :type semantic: Dict[str, Any]
+        :param cache: The merged provision cache. This event does not build one.
+        :type cache: Any
+        :param provision_prefix: The namespace prefix the caller passes.
+        :type provision_prefix: tuple
         :param findings: Prior findings to prepend. None is an empty list.
         :type findings: List[Dict]
         :param kwargs: Middleware keyword arguments, such as logging, caching, and timing. Passed through and not consumed. ``component`` is not read.
@@ -156,8 +165,8 @@ class CheckEventConformance(ConformanceEvent):
         :rtype: List[Dict]
         '''
 
-        # Delegate to the bound rule set. Leave kwargs for middleware.
-        return self.run_rule_set(ast, semantic, findings)
+        # Delegate to the bound selector. Leave kwargs for middleware.
+        return self.run_rule_set(ast, semantic, cache, provision_prefix, findings)
 
 # ** event: check_asset_conformance
 class CheckAssetConformance(ConformanceEvent):
@@ -168,14 +177,16 @@ class CheckAssetConformance(ConformanceEvent):
     module kind. Gating is configuration, not logic in ``execute``.
     '''
 
-    # * attribute: rule_set
-    rule_set: ClassVar[List[Specification]] = ASSET_RULE_SET
+    # * attribute: selector
+    selector: ClassVar[str] = 'asset.'
 
     # * method: execute
-    @DomainEvent.parameters_required(['ast', 'semantic'])
+    @DomainEvent.parameters_required(['ast', 'semantic', 'cache', 'provision_prefix'])
     def execute(self,
             ast: Decl,
             semantic: Dict[str, Any],
+            cache: Any,
+            provision_prefix: tuple,
             findings: List[Dict] = None,
             **kwargs,
         ) -> List[Dict]:
@@ -186,6 +197,10 @@ class CheckAssetConformance(ConformanceEvent):
         :type ast: Decl
         :param semantic: The semantic result, including the dumped symbol table.
         :type semantic: Dict[str, Any]
+        :param cache: The merged provision cache. This event does not build one.
+        :type cache: Any
+        :param provision_prefix: The namespace prefix the caller passes.
+        :type provision_prefix: tuple
         :param findings: Prior findings to prepend. None is an empty list.
         :type findings: List[Dict]
         :param kwargs: Middleware keyword arguments, such as logging, caching, and timing. Passed through and not consumed. ``component`` is not read.
@@ -194,8 +209,8 @@ class CheckAssetConformance(ConformanceEvent):
         :rtype: List[Dict]
         '''
 
-        # Delegate to the bound rule set. Leave kwargs for middleware.
-        return self.run_rule_set(ast, semantic, findings)
+        # Delegate to the bound selector. Leave kwargs for middleware.
+        return self.run_rule_set(ast, semantic, cache, provision_prefix, findings)
 
 # ** event: check_domain_conformance
 class CheckDomainConformance(ConformanceEvent):
@@ -206,14 +221,16 @@ class CheckDomainConformance(ConformanceEvent):
     module kind. Gating is configuration, not logic in ``execute``.
     '''
 
-    # * attribute: rule_set
-    rule_set: ClassVar[List[Specification]] = DOMAIN_RULE_SET
+    # * attribute: selector
+    selector: ClassVar[str] = 'domain.'
 
     # * method: execute
-    @DomainEvent.parameters_required(['ast', 'semantic'])
+    @DomainEvent.parameters_required(['ast', 'semantic', 'cache', 'provision_prefix'])
     def execute(self,
             ast: Decl,
             semantic: Dict[str, Any],
+            cache: Any,
+            provision_prefix: tuple,
             findings: List[Dict] = None,
             **kwargs,
         ) -> List[Dict]:
@@ -224,6 +241,10 @@ class CheckDomainConformance(ConformanceEvent):
         :type ast: Decl
         :param semantic: The semantic result, including the dumped symbol table.
         :type semantic: Dict[str, Any]
+        :param cache: The merged provision cache. This event does not build one.
+        :type cache: Any
+        :param provision_prefix: The namespace prefix the caller passes.
+        :type provision_prefix: tuple
         :param findings: Prior findings to prepend. None is an empty list.
         :type findings: List[Dict]
         :param kwargs: Middleware keyword arguments, such as logging, caching, and timing. Passed through and not consumed. ``component`` is not read.
@@ -232,8 +253,8 @@ class CheckDomainConformance(ConformanceEvent):
         :rtype: List[Dict]
         '''
 
-        # Delegate to the bound rule set. Leave kwargs for middleware.
-        return self.run_rule_set(ast, semantic, findings)
+        # Delegate to the bound selector. Leave kwargs for middleware.
+        return self.run_rule_set(ast, semantic, cache, provision_prefix, findings)
 
 # ** event: check_mapper_conformance
 class CheckMapperConformance(ConformanceEvent):
@@ -244,14 +265,16 @@ class CheckMapperConformance(ConformanceEvent):
     module kind. Gating is configuration, not logic in ``execute``.
     '''
 
-    # * attribute: rule_set
-    rule_set: ClassVar[List[Specification]] = MAPPER_RULE_SET
+    # * attribute: selector
+    selector: ClassVar[str] = 'mapper.'
 
     # * method: execute
-    @DomainEvent.parameters_required(['ast', 'semantic'])
+    @DomainEvent.parameters_required(['ast', 'semantic', 'cache', 'provision_prefix'])
     def execute(self,
             ast: Decl,
             semantic: Dict[str, Any],
+            cache: Any,
+            provision_prefix: tuple,
             findings: List[Dict] = None,
             **kwargs,
         ) -> List[Dict]:
@@ -262,6 +285,10 @@ class CheckMapperConformance(ConformanceEvent):
         :type ast: Decl
         :param semantic: The semantic result, including the dumped symbol table.
         :type semantic: Dict[str, Any]
+        :param cache: The merged provision cache. This event does not build one.
+        :type cache: Any
+        :param provision_prefix: The namespace prefix the caller passes.
+        :type provision_prefix: tuple
         :param findings: Prior findings to prepend. None is an empty list.
         :type findings: List[Dict]
         :param kwargs: Middleware keyword arguments, such as logging, caching, and timing. Passed through and not consumed. ``component`` is not read.
@@ -270,8 +297,8 @@ class CheckMapperConformance(ConformanceEvent):
         :rtype: List[Dict]
         '''
 
-        # Delegate to the bound rule set. Leave kwargs for middleware.
-        return self.run_rule_set(ast, semantic, findings)
+        # Delegate to the bound selector. Leave kwargs for middleware.
+        return self.run_rule_set(ast, semantic, cache, provision_prefix, findings)
 
 # ** event: check_interface_conformance
 class CheckInterfaceConformance(ConformanceEvent):
@@ -282,14 +309,16 @@ class CheckInterfaceConformance(ConformanceEvent):
     module kind. Gating is configuration, not logic in ``execute``.
     '''
 
-    # * attribute: rule_set
-    rule_set: ClassVar[List[Specification]] = INTERFACE_RULE_SET
+    # * attribute: selector
+    selector: ClassVar[str] = 'interface.'
 
     # * method: execute
-    @DomainEvent.parameters_required(['ast', 'semantic'])
+    @DomainEvent.parameters_required(['ast', 'semantic', 'cache', 'provision_prefix'])
     def execute(self,
             ast: Decl,
             semantic: Dict[str, Any],
+            cache: Any,
+            provision_prefix: tuple,
             findings: List[Dict] = None,
             **kwargs,
         ) -> List[Dict]:
@@ -300,6 +329,10 @@ class CheckInterfaceConformance(ConformanceEvent):
         :type ast: Decl
         :param semantic: The semantic result, including the dumped symbol table.
         :type semantic: Dict[str, Any]
+        :param cache: The merged provision cache. This event does not build one.
+        :type cache: Any
+        :param provision_prefix: The namespace prefix the caller passes.
+        :type provision_prefix: tuple
         :param findings: Prior findings to prepend. None is an empty list.
         :type findings: List[Dict]
         :param kwargs: Middleware keyword arguments, such as logging, caching, and timing. Passed through and not consumed. ``component`` is not read.
@@ -308,8 +341,8 @@ class CheckInterfaceConformance(ConformanceEvent):
         :rtype: List[Dict]
         '''
 
-        # Delegate to the bound rule set. Leave kwargs for middleware.
-        return self.run_rule_set(ast, semantic, findings)
+        # Delegate to the bound selector. Leave kwargs for middleware.
+        return self.run_rule_set(ast, semantic, cache, provision_prefix, findings)
 
 # ** event: check_di_conformance
 class CheckDIConformance(ConformanceEvent):
@@ -320,14 +353,16 @@ class CheckDIConformance(ConformanceEvent):
     module kind. Gating is configuration, not logic in ``execute``.
     '''
 
-    # * attribute: rule_set
-    rule_set: ClassVar[List[Specification]] = DI_RULE_SET
+    # * attribute: selector
+    selector: ClassVar[str] = 'di.'
 
     # * method: execute
-    @DomainEvent.parameters_required(['ast', 'semantic'])
+    @DomainEvent.parameters_required(['ast', 'semantic', 'cache', 'provision_prefix'])
     def execute(self,
             ast: Decl,
             semantic: Dict[str, Any],
+            cache: Any,
+            provision_prefix: tuple,
             findings: List[Dict] = None,
             **kwargs,
         ) -> List[Dict]:
@@ -338,6 +373,10 @@ class CheckDIConformance(ConformanceEvent):
         :type ast: Decl
         :param semantic: The semantic result, including the dumped symbol table.
         :type semantic: Dict[str, Any]
+        :param cache: The merged provision cache. This event does not build one.
+        :type cache: Any
+        :param provision_prefix: The namespace prefix the caller passes.
+        :type provision_prefix: tuple
         :param findings: Prior findings to prepend. None is an empty list.
         :type findings: List[Dict]
         :param kwargs: Middleware keyword arguments, such as logging, caching, and timing. Passed through and not consumed. ``component`` is not read.
@@ -346,8 +385,8 @@ class CheckDIConformance(ConformanceEvent):
         :rtype: List[Dict]
         '''
 
-        # Delegate to the bound rule set. Leave kwargs for middleware.
-        return self.run_rule_set(ast, semantic, findings)
+        # Delegate to the bound selector. Leave kwargs for middleware.
+        return self.run_rule_set(ast, semantic, cache, provision_prefix, findings)
 
 # ** event: check_utils_conformance
 class CheckUtilsConformance(ConformanceEvent):
@@ -358,14 +397,16 @@ class CheckUtilsConformance(ConformanceEvent):
     module kind. Gating is configuration, not logic in ``execute``.
     '''
 
-    # * attribute: rule_set
-    rule_set: ClassVar[List[Specification]] = UTILS_RULE_SET
+    # * attribute: selector
+    selector: ClassVar[str] = 'utils.'
 
     # * method: execute
-    @DomainEvent.parameters_required(['ast', 'semantic'])
+    @DomainEvent.parameters_required(['ast', 'semantic', 'cache', 'provision_prefix'])
     def execute(self,
             ast: Decl,
             semantic: Dict[str, Any],
+            cache: Any,
+            provision_prefix: tuple,
             findings: List[Dict] = None,
             **kwargs,
         ) -> List[Dict]:
@@ -376,6 +417,10 @@ class CheckUtilsConformance(ConformanceEvent):
         :type ast: Decl
         :param semantic: The semantic result, including the dumped symbol table.
         :type semantic: Dict[str, Any]
+        :param cache: The merged provision cache. This event does not build one.
+        :type cache: Any
+        :param provision_prefix: The namespace prefix the caller passes.
+        :type provision_prefix: tuple
         :param findings: Prior findings to prepend. None is an empty list.
         :type findings: List[Dict]
         :param kwargs: Middleware keyword arguments, such as logging, caching, and timing. Passed through and not consumed. ``component`` is not read.
@@ -384,8 +429,8 @@ class CheckUtilsConformance(ConformanceEvent):
         :rtype: List[Dict]
         '''
 
-        # Delegate to the bound rule set. Leave kwargs for middleware.
-        return self.run_rule_set(ast, semantic, findings)
+        # Delegate to the bound selector. Leave kwargs for middleware.
+        return self.run_rule_set(ast, semantic, cache, provision_prefix, findings)
 
 # ** event: check_contexts_conformance
 class CheckContextsConformance(ConformanceEvent):
@@ -396,14 +441,16 @@ class CheckContextsConformance(ConformanceEvent):
     module kind. Gating is configuration, not logic in ``execute``.
     '''
 
-    # * attribute: rule_set
-    rule_set: ClassVar[List[Specification]] = CONTEXTS_RULE_SET
+    # * attribute: selector
+    selector: ClassVar[str] = 'contexts.'
 
     # * method: execute
-    @DomainEvent.parameters_required(['ast', 'semantic'])
+    @DomainEvent.parameters_required(['ast', 'semantic', 'cache', 'provision_prefix'])
     def execute(self,
             ast: Decl,
             semantic: Dict[str, Any],
+            cache: Any,
+            provision_prefix: tuple,
             findings: List[Dict] = None,
             **kwargs,
         ) -> List[Dict]:
@@ -414,6 +461,10 @@ class CheckContextsConformance(ConformanceEvent):
         :type ast: Decl
         :param semantic: The semantic result, including the dumped symbol table.
         :type semantic: Dict[str, Any]
+        :param cache: The merged provision cache. This event does not build one.
+        :type cache: Any
+        :param provision_prefix: The namespace prefix the caller passes.
+        :type provision_prefix: tuple
         :param findings: Prior findings to prepend. None is an empty list.
         :type findings: List[Dict]
         :param kwargs: Middleware keyword arguments, such as logging, caching, and timing. Passed through and not consumed. ``component`` is not read.
@@ -422,8 +473,8 @@ class CheckContextsConformance(ConformanceEvent):
         :rtype: List[Dict]
         '''
 
-        # Delegate to the bound rule set. Leave kwargs for middleware.
-        return self.run_rule_set(ast, semantic, findings)
+        # Delegate to the bound selector. Leave kwargs for middleware.
+        return self.run_rule_set(ast, semantic, cache, provision_prefix, findings)
 
 # ** event: check_blueprints_conformance
 class CheckBlueprintsConformance(ConformanceEvent):
@@ -434,14 +485,16 @@ class CheckBlueprintsConformance(ConformanceEvent):
     module kind. Gating is configuration, not logic in ``execute``.
     '''
 
-    # * attribute: rule_set
-    rule_set: ClassVar[List[Specification]] = BLUEPRINTS_RULE_SET
+    # * attribute: selector
+    selector: ClassVar[str] = 'blueprints.'
 
     # * method: execute
-    @DomainEvent.parameters_required(['ast', 'semantic'])
+    @DomainEvent.parameters_required(['ast', 'semantic', 'cache', 'provision_prefix'])
     def execute(self,
             ast: Decl,
             semantic: Dict[str, Any],
+            cache: Any,
+            provision_prefix: tuple,
             findings: List[Dict] = None,
             **kwargs,
         ) -> List[Dict]:
@@ -452,6 +505,10 @@ class CheckBlueprintsConformance(ConformanceEvent):
         :type ast: Decl
         :param semantic: The semantic result, including the dumped symbol table.
         :type semantic: Dict[str, Any]
+        :param cache: The merged provision cache. This event does not build one.
+        :type cache: Any
+        :param provision_prefix: The namespace prefix the caller passes.
+        :type provision_prefix: tuple
         :param findings: Prior findings to prepend. None is an empty list.
         :type findings: List[Dict]
         :param kwargs: Middleware keyword arguments, such as logging, caching, and timing. Passed through and not consumed. ``component`` is not read.
@@ -460,8 +517,8 @@ class CheckBlueprintsConformance(ConformanceEvent):
         :rtype: List[Dict]
         '''
 
-        # Delegate to the bound rule set. Leave kwargs for middleware.
-        return self.run_rule_set(ast, semantic, findings)
+        # Delegate to the bound selector. Leave kwargs for middleware.
+        return self.run_rule_set(ast, semantic, cache, provision_prefix, findings)
 
 # ** event: check_repos_conformance
 class CheckReposConformance(ConformanceEvent):
@@ -472,14 +529,16 @@ class CheckReposConformance(ConformanceEvent):
     module kind. Gating is configuration, not logic in ``execute``.
     '''
 
-    # * attribute: rule_set
-    rule_set: ClassVar[List[Specification]] = REPOS_RULE_SET
+    # * attribute: selector
+    selector: ClassVar[str] = 'repos.'
 
     # * method: execute
-    @DomainEvent.parameters_required(['ast', 'semantic'])
+    @DomainEvent.parameters_required(['ast', 'semantic', 'cache', 'provision_prefix'])
     def execute(self,
             ast: Decl,
             semantic: Dict[str, Any],
+            cache: Any,
+            provision_prefix: tuple,
             findings: List[Dict] = None,
             **kwargs,
         ) -> List[Dict]:
@@ -490,6 +549,10 @@ class CheckReposConformance(ConformanceEvent):
         :type ast: Decl
         :param semantic: The semantic result, including the dumped symbol table.
         :type semantic: Dict[str, Any]
+        :param cache: The merged provision cache. This event does not build one.
+        :type cache: Any
+        :param provision_prefix: The namespace prefix the caller passes.
+        :type provision_prefix: tuple
         :param findings: Prior findings to prepend. None is an empty list.
         :type findings: List[Dict]
         :param kwargs: Middleware keyword arguments, such as logging, caching, and timing. Passed through and not consumed. ``component`` is not read.
@@ -498,5 +561,5 @@ class CheckReposConformance(ConformanceEvent):
         :rtype: List[Dict]
         '''
 
-        # Delegate to the bound rule set. Leave kwargs for middleware.
-        return self.run_rule_set(ast, semantic, findings)
+        # Delegate to the bound selector. Leave kwargs for middleware.
+        return self.run_rule_set(ast, semantic, cache, provision_prefix, findings)

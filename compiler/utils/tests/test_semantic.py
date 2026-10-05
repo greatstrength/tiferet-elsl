@@ -24,15 +24,42 @@ from ...mappers.ast import (
     StatementAggregate,
     TypeAggregate,
 )
+from ...blueprints.core import build_cache
+from ...contexts.provision import COMPILER_PROVISION_CACHE_PREFIX
 from ..core import StatementWalker
 from ..semantic import (
-    BUILDER_PRODUCTION_SET,
     RESOLVER_PRODUCTION_SET,
     NameResolver,
     SymbolTableBuilder,
 )
 
 # *** functions
+
+# ** function: _provision_cache
+def _provision_cache():
+    '''
+    Return one cache seeded by the compiler blueprint.
+
+    :return: The seeded cache.
+    :rtype: Any
+    '''
+
+    # Builder tests read the seed. They do not rebuild the deleted list.
+    if not hasattr(_provision_cache, 'cache'):
+        _provision_cache.cache = build_cache()
+    return _provision_cache.cache
+
+# ** function: _builder
+def _builder() -> SymbolTableBuilder:
+    '''
+    Construct a builder against the seeded provision cache.
+
+    :return: The symbol-table builder.
+    :rtype: SymbolTableBuilder
+    '''
+
+    # The prefix is passed in. This module under test does not import it.
+    return SymbolTableBuilder(_provision_cache(), COMPILER_PROVISION_CACHE_PREFIX)
 
 # ** function: _name
 def _name(name: str) -> ExpressionAggregate:
@@ -188,7 +215,7 @@ def _resolve(module: DeclarationAggregate):
     '''
 
     # The resolver needs the live aggregates, not the dumped build dict.
-    builder = SymbolTableBuilder()
+    builder = _builder()
     built = builder.build(module)
     resolved = NameResolver(builder.scopes).resolve(module)
     return built, resolved
@@ -342,7 +369,7 @@ def test_build_imports_only(imports_only_module: DeclarationAggregate) -> None:
     '''
 
     # Build the module scope and read the registered imports.
-    result = SymbolTableBuilder().build(imports_only_module)
+    result = _builder().build(imports_only_module)
     symbols = result['scopes']['module']['symbols']
 
     # The root path is the module scope the factory assigns.
@@ -370,7 +397,7 @@ def test_build_minimal_event(minimal_event_module: DeclarationAggregate) -> None
     '''
 
     # Build the class, method, and parameter scopes.
-    result = SymbolTableBuilder().build(minimal_event_module)
+    result = _builder().build(minimal_event_module)
     module_symbols = result['scopes']['module']['symbols']
     class_symbols = result['scopes']['module.Ping']['symbols']
     method_symbols = result['scopes']['module.Ping.execute']['symbols']
@@ -400,7 +427,7 @@ def test_build_minimal_injection_event(
     '''
 
     # Build the constructor assignment.
-    result = SymbolTableBuilder().build(injection_event_module)
+    result = _builder().build(injection_event_module)
     class_symbols = result['scopes']['module.Inject']['symbols']
     method_symbols = result['scopes']['module.Inject.__init__']['symbols']
 
@@ -423,7 +450,7 @@ def test_build_multiple_operator_events(
     '''
 
     # Build both class scopes.
-    result = SymbolTableBuilder().build(multiple_operator_module)
+    result = _builder().build(multiple_operator_module)
     children = result['scopes']['module']['children']
 
     # Each class is a child of the module and a class definition there.
@@ -445,7 +472,7 @@ def test_build_module_level_function(
     '''
 
     # Build the function on the module scope.
-    result = SymbolTableBuilder().build(module_level_function_module)
+    result = _builder().build(module_level_function_module)
 
     # The function is a method symbol and a child method scope.
     assert result['scopes']['module']['symbols']['helper']['kind'] == SYMBOL_KIND_METHOD
@@ -613,9 +640,9 @@ def test_builder_uses_apply_provisions(monkeypatch) -> None:
     assert 'attaches_to' not in source
     assert SymbolTableBuilder.apply_provisions is StatementWalker.apply_provisions
 
-    # The default set is the builder production set, in TRD order.
-    builder = SymbolTableBuilder()
-    assert builder.productions is BUILDER_PRODUCTION_SET
+    # The seeded builder attaches the six productions, in cache order.
+    builder = _builder()
+    assert not hasattr(SymbolTableBuilder, 'BUILDER_PRODUCTION_SET')
     assert [
         (item.id, type(item).__name__, item.applies_to)
         for item in builder.productions

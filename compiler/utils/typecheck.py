@@ -6,438 +6,31 @@
 from typing import Any, Dict, List, Optional
 
 # ** app
-from ..mappers import Declaration, Statement
+from ..mappers import (
+    PROVISION_KIND_SPECIFICATION,
+    Declaration,
+    Statement,
+)
 from ..mappers.typecheck import TypeErrorCollection
 from .core import (
-    AppImportSpecification,
-    AssignmentTypeSpecification,
-    AttributeMemberSpecification,
-    BinaryOpTypeSpecification,
     ConformanceContext,
-    ConstantSectionNameSpecification,
-    ContextManagerPairingSpecification,
-    DIAbstractMethodSpecification,
-    DomainAttributeSpecification,
-    EventSectionSpecification,
-    FunctionSectionNameSpecification,
-    GroupSectionAgreementSpecification,
-    ImportGroupSpecification,
-    InterfaceAbstractMethodSpecification,
-    MapperRolesAttributeSpecification,
-    MethodMemberSpecification,
-    PermittedGroupSpecification,
-    ReposCrudMethodSpecification,
-    RequiredBaseSpecification,
-    ReturnBinaryOpTypeSpecification,
-    SectionClassNameSpecification,
-    Specification,
     StatementWalker,
-    declares_bound_domain_type,
 )
-
-# *** constants
-
-# ** constant: common_rule_set
-COMMON_RULE_SET: List[Specification] = [
-    ImportGroupSpecification(
-        id='common.import_group',
-        applies_to='artifact_header',
-    ),
-    SectionClassNameSpecification(
-        id='common.section_class_name',
-        applies_to='artifact_header',
-    ),
-    FunctionSectionNameSpecification(
-        id='common.function_section_name',
-        applies_to='artifact_header',
-    ),
-    AttributeMemberSpecification(
-        id='common.attribute_member',
-        applies_to='member',
-    ),
-    MethodMemberSpecification(
-        id='common.method_member',
-        applies_to='member',
-    ),
-    AssignmentTypeSpecification(
-        id='common.assignment_type',
-        applies_to='expression',
-    ),
-    BinaryOpTypeSpecification(
-        id='common.binary_op_expression',
-        applies_to='expression',
-    ),
-    ReturnBinaryOpTypeSpecification(
-        id='common.binary_op_return',
-        applies_to='return',
-    ),
-]
-
-# ** constant: event_rule_set
-EVENT_RULE_SET: List[Specification] = [
-    EventSectionSpecification(
-        id='event.section',
-        applies_to='artifact_header',
-    ),
-]
-
-# ** constant: domain_rule_set
-DOMAIN_RULE_SET: List[Specification] = [
-    PermittedGroupSpecification(
-        id='domain.permitted_group',
-        applies_to='artifact_header',
-        permitted_groups=frozenset({
-            'imports',
-            'constants',
-            'functions',
-            'classes',
-            'models',
-            'exports',
-        }),
-        error_code='DISALLOWED_DOMAIN_GROUP',
-        module_label='a domain module',
-    ),
-    AppImportSpecification(
-        id='domain.app_import',
-        applies_to='artifact_header',
-        error_code='INVALID_DOMAIN_APP_IMPORT',
-        message=(
-            "Domain 'app' import group may only import same-package sibling "
-            "modules or the assets component type; found '{module_path}'."
-        ),
-        allowed_components=frozenset({'assets'}),
-    ),
-    GroupSectionAgreementSpecification(
-        id='domain.group_section_agreement',
-        applies_to='artifact_header',
-    ),
-    RequiredBaseSpecification(
-        id='domain.model_base_class',
-        applies_to='artifact_header',
-        section_keyword='model',
-        error_code='MODEL_MISSING_DOMAIN_OBJECT_BASE',
-        message=(
-            "Model '{header_name}' class '{class_name}' declares no base class; "
-            "it must extend DomainObject"
-        ),
-        name_key='model_name',
-    ),
-    DomainAttributeSpecification(
-        id='domain.attribute',
-        applies_to='member',
-    ),
-]
-
-# ** constant: di_rule_set
-DI_RULE_SET: List[Specification] = [
-    PermittedGroupSpecification(
-        id='di.permitted_group',
-        applies_to='artifact_header',
-        permitted_groups=frozenset({
-            'imports',
-            'constants',
-            'functions',
-            'classes',
-            'exports',
-        }),
-        error_code='DISALLOWED_DI_GROUP',
-        module_label='a di module',
-    ),
-    AppImportSpecification(
-        id='di.app_import',
-        applies_to='artifact_header',
-        error_code='INVALID_DI_APP_IMPORT',
-        message=(
-            "DI 'app' import group may only import same-package sibling "
-            "modules or the domain/interfaces component types; found '{module_path}'."
-        ),
-        allowed_components=frozenset({
-            'domain',
-            'interfaces',
-        }),
-    ),
-    DIAbstractMethodSpecification(
-        id='di.abstract_method',
-        applies_to='artifact_header',
-    ),
-]
-
-# ** constant: interface_rule_set
-INTERFACE_RULE_SET: List[Specification] = [
-    PermittedGroupSpecification(
-        id='interface.permitted_group',
-        applies_to='artifact_header',
-        permitted_groups=frozenset({
-            'imports',
-            'classes',
-            'interfaces',
-            'exports',
-        }),
-        error_code='DISALLOWED_INTERFACE_GROUP',
-        module_label='an interfaces module',
-    ),
-    AppImportSpecification(
-        id='interface.app_import',
-        applies_to='artifact_header',
-        error_code='INVALID_INTERFACE_APP_IMPORT',
-        message=(
-            "Interface 'app' import group may only import same-package sibling "
-            "modules or the mappers component type; found '{module_path}'."
-        ),
-        allowed_components=frozenset({'mappers'}),
-    ),
-    InterfaceAbstractMethodSpecification(
-        id='interface.abstract_method',
-        applies_to='artifact_header',
-    ),
-]
-
-# ** constant: mapper_rule_set
-MAPPER_RULE_SET: List[Specification] = [
-    PermittedGroupSpecification(
-        id='mapper.permitted_group',
-        applies_to='artifact_header',
-        permitted_groups=frozenset({
-            'imports',
-            'constants',
-            'mappers',
-            'exports',
-        }),
-        error_code='DISALLOWED_MAPPER_GROUP',
-        module_label='a mappers module',
-    ),
-    AppImportSpecification(
-        id='mapper.app_import',
-        applies_to='artifact_header',
-        error_code='INVALID_MAPPER_APP_IMPORT',
-        message=(
-            "Mapper 'app' import group may only import same-package sibling "
-            "modules or the domain/events component types; found '{module_path}'."
-        ),
-        allowed_components=frozenset({
-            'domain',
-            'events',
-        }),
-    ),
-    GroupSectionAgreementSpecification(
-        id='mapper.group_section_agreement',
-        applies_to='artifact_header',
-    ),
-    MapperRolesAttributeSpecification(
-        id='mapper.roles_attribute',
-        applies_to='member',
-    ),
-]
-
-# ** constant: utils_rule_set
-UTILS_RULE_SET: List[Specification] = [
-    PermittedGroupSpecification(
-        id='utils.permitted_group',
-        applies_to='artifact_header',
-        permitted_groups=frozenset({
-            'imports',
-            'constants',
-            'utils',
-            'exports',
-        }),
-        error_code='DISALLOWED_UTILS_GROUP',
-        module_label='a utils module',
-    ),
-    AppImportSpecification(
-        id='utils.app_import',
-        applies_to='artifact_header',
-        error_code='INVALID_UTILS_APP_IMPORT',
-        message=(
-            "Utils 'app' import group may only import same-package sibling "
-            "modules or the interfaces/mappers component types; found '{module_path}'."
-        ),
-        allowed_components=frozenset({
-            'interfaces',
-            'mappers',
-        }),
-    ),
-    ContextManagerPairingSpecification(
-        id='utils.context_manager_pairing',
-        applies_to='artifact_header',
-    ),
-]
-
-# ** constant: repos_rule_set
-REPOS_RULE_SET: List[Specification] = [
-    PermittedGroupSpecification(
-        id='repos.permitted_group',
-        applies_to='artifact_header',
-        permitted_groups=frozenset({
-            'imports',
-            'repos',
-            'exports',
-        }),
-        error_code='DISALLOWED_REPOS_GROUP',
-        module_label='a repos module',
-    ),
-    AppImportSpecification(
-        id='repos.app_import',
-        applies_to='artifact_header',
-        error_code='INVALID_REPOS_APP_IMPORT',
-        message=(
-            "Repos 'app' import group may only import same-package sibling "
-            "modules or the interfaces/mappers/utils component types; found '{module_path}'."
-        ),
-        allowed_components=frozenset({
-            'interfaces',
-            'mappers',
-            'utils',
-        }),
-    ),
-    RequiredBaseSpecification(
-        id='repos.base_class',
-        applies_to='artifact_header',
-        section_keyword='repo',
-        error_code='REPO_MISSING_BASE',
-        message=(
-            "Repo '{header_name}' class '{class_name}' must declare a base class"
-        ),
-        name_key='repo_name',
-    ),
-    ReposCrudMethodSpecification(
-        id='repos.crud_method',
-        applies_to='artifact_header',
-    ),
-]
-
-# ** constant: asset_rule_set
-ASSET_RULE_SET: List[Specification] = [
-    PermittedGroupSpecification(
-        id='asset.permitted_group',
-        applies_to='artifact_header',
-        permitted_groups=frozenset({
-            'imports',
-            'constants',
-            'functions',
-            'classes',
-            'exports',
-        }),
-        error_code='DISALLOWED_ASSET_GROUP',
-        module_label='an assets module',
-    ),
-    AppImportSpecification(
-        id='asset.import_sibling',
-        applies_to='artifact_header',
-        error_code='INVALID_ASSET_APP_IMPORT',
-        message=(
-            "Assets 'app' import group may only import same-package sibling "
-            "modules (e.g. 'from .core import ...'); found '{module_path}'."
-        ),
-        allowed_components=frozenset(),
-        allow_siblings=True,
-        allow_framework_root_alias=False,
-    ),
-    GroupSectionAgreementSpecification(
-        id='asset.group_section_agreement',
-        applies_to='artifact_header',
-    ),
-    ConstantSectionNameSpecification(
-        id='asset.constant_section_name',
-        applies_to='artifact_header',
-    ),
-]
-
-# ** constant: contexts_rule_set
-CONTEXTS_RULE_SET: List[Specification] = [
-    PermittedGroupSpecification(
-        id='contexts.permitted_group',
-        applies_to='artifact_header',
-        permitted_groups=frozenset({
-            'imports',
-            'contexts',
-            'exports',
-            'classes',
-            'constants',
-            'functions',
-        }),
-        error_code='DISALLOWED_CONTEXTS_GROUP',
-        module_label='a contexts module',
-    ),
-    AppImportSpecification(
-        id='contexts.app_import',
-        applies_to='artifact_header',
-        error_code='INVALID_CONTEXTS_APP_IMPORT',
-        message=(
-            "Contexts 'app' import group may only import same-package sibling "
-            "modules or the assets/domain/events component types; found '{module_path}'."
-        ),
-        allowed_components=frozenset({
-            'assets',
-            'domain',
-            'events',
-        }),
-        allow_siblings=True,
-        allow_framework_root_alias=True,
-    ),
-    RequiredBaseSpecification(
-        id='contexts.base_class',
-        applies_to='artifact_header',
-        section_keyword='context',
-        error_code='CONTEXT_MISSING_BASE_CONTEXT',
-        message=(
-            "Context class '{class_name}' declares 'domain_type' and must extend 'BaseContext'"
-        ),
-        required_base='BaseContext',
-        predicate=declares_bound_domain_type,
-    ),
-]
-
-# ** constant: blueprints_rule_set
-BLUEPRINTS_RULE_SET: List[Specification] = [
-    PermittedGroupSpecification(
-        id='blueprints.permitted_group',
-        applies_to='artifact_header',
-        permitted_groups=frozenset({
-            'imports',
-            'constants',
-            'functions',
-            'blueprints',
-            'exports',
-        }),
-        error_code='DISALLOWED_BLUEPRINTS_GROUP',
-        module_label='a blueprints module',
-    ),
-    AppImportSpecification(
-        id='blueprints.app_import',
-        applies_to='artifact_header',
-        error_code='INVALID_BLUEPRINTS_APP_IMPORT',
-        message=(
-            "Blueprints 'app' import group may only import same-package sibling "
-            "modules or the assets/contexts/di/events component types; found '{module_path}'."
-        ),
-        allowed_components=frozenset({
-            'assets',
-            'contexts',
-            'di',
-            'events',
-        }),
-        allow_siblings=True,
-        allow_framework_root_alias=True,
-    ),
-    GroupSectionAgreementSpecification(
-        id='blueprints.group_section_agreement',
-        applies_to='artifact_header',
-    ),
-]
+from .provision import collect_owned_provisions
 
 # *** utils
 
 # ** util: conformance_checker
 class ConformanceChecker(StatementWalker):
     '''
-    Walk a module once and collect findings for the attached rule set.
+    Walk a module once and collect findings for one dialect selector.
 
-    Behavior varies only by which specifications are in the rule set. A later
-    dialect story adds a constant list, not a subclass.
+    Behavior varies by the specification prefix the caller selects. The
+    checker does not own the catalog and does not walk every specification.
     '''
 
-    # * attribute: rule_set
-    rule_set: List[Specification]
+    # * attribute: provision_findings
+    provision_findings: List[Dict]
 
     # * attribute: _finding_collection
     _finding_collection: TypeErrorCollection
@@ -446,22 +39,33 @@ class ConformanceChecker(StatementWalker):
     _group_stack: List[str]
 
     # * init
-    def __init__(self, scopes: Dict[str, Any],
-                 rule_set: List[Specification]) -> None:
+    def __init__(self, scopes: Dict[str, Any], cache, selector: str,
+            provision_prefix: tuple) -> None:
         '''
-        Store the scope registry and the specifications this checker applies.
+        Store the scope registry and attach the selected specifications.
 
         :param scopes: The flat path-to-scope registry.
         :type scopes: Dict[str, Any]
-        :param rule_set: The specifications to attach.
-        :type rule_set: List[Specification]
+        :param cache: The cache whose provision namespace is read once.
+        :type cache: Any
+        :param selector: The owned id prefix, including the trailing dot.
+        :type selector: str
+        :param provision_prefix: The namespace prefix the caller passes.
+        :type provision_prefix: tuple
         :return: None
         :rtype: None
         '''
 
-        # The provision list is the rule set. The walk starts with no findings.
-        super().__init__(scopes=scopes, provisions=rule_set)
-        self.rule_set = rule_set
+        # Read the namespace once. A later check does not read it again.
+        rows = cache.get_by_prefix(*provision_prefix)
+        provisions, self.provision_findings = collect_owned_provisions(
+            rows,
+            owned_prefix=selector,
+            kind=PROVISION_KIND_SPECIFICATION,
+        )
+
+        # The provision list is the selected specifications. The walk starts empty.
+        super().__init__(scopes=scopes, provisions=provisions)
         self._finding_collection = TypeErrorCollection()
         self._group_stack = []
 
@@ -470,13 +74,16 @@ class ConformanceChecker(StatementWalker):
         '''
         Check one module declaration and return every collected finding.
 
+        Instantiation findings come first, including when the module scope
+        is missing. Walk findings stay on the collection.
+
         :param module_decl: The module declaration to walk.
         :type module_decl: Declaration
-        :return: Flattened finding dicts, empty when the module scope is missing.
+        :return: Instantiation findings followed by walk findings.
         :rtype: List[Dict]
         '''
 
-        # A fresh check does not keep findings or a stack from a previous walk.
+        # A fresh check does not keep walk findings or a stack from a previous walk.
         self.scope_stack = []
         self._finding_collection.reset()
         self._group_stack = []
@@ -484,13 +91,13 @@ class ConformanceChecker(StatementWalker):
         # Without a module scope there is nothing to check against.
         module_scope = self.scopes.get('module')
         if module_scope is None:
-            return self._finding_collection.to_list()
+            return list(self.provision_findings) + self._finding_collection.to_list()
 
         # Walk the body inside the module scope, then take the findings.
         self.scope_stack.append(module_scope)
         if module_decl.code:
             self.walk_statements(module_decl.code)
-        return self._finding_collection.to_list()
+        return list(self.provision_findings) + self._finding_collection.to_list()
 
     # * method: apply
     def apply(self, visit: str, candidate: Any,

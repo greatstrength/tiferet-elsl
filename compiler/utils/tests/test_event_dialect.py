@@ -13,9 +13,25 @@ from ...mappers.ast import (
     TypeAggregate,
 )
 from ..semantic import SymbolTableBuilder
-from ..typecheck import EVENT_RULE_SET, ConformanceChecker
+from ...blueprints.core import build_cache
+from ...contexts.provision import COMPILER_PROVISION_CACHE_PREFIX
+from ..typecheck import ConformanceChecker
 
 # *** functions
+
+# ** function: _provision_cache
+def _provision_cache():
+    '''
+    Return one cache seeded by the compiler blueprint.
+
+    :return: The seeded cache.
+    :rtype: Any
+    '''
+
+    # Dialect tests read the seed. They do not rebuild the deleted lists.
+    if not hasattr(_provision_cache, 'cache'):
+        _provision_cache.cache = build_cache()
+    return _provision_cache.cache
 
 # ** function: _module
 def _module(code: list) -> DeclarationAggregate:
@@ -141,11 +157,14 @@ def check_event(module: DeclarationAggregate) -> list:
     '''
 
     # The checker reads the live registry, not the dumped build dict.
-    builder = SymbolTableBuilder()
+    cache = _provision_cache()
+    builder = SymbolTableBuilder(cache, COMPILER_PROVISION_CACHE_PREFIX)
     builder.build(module)
     return ConformanceChecker(
-        scopes=builder.scopes,
-        rule_set=EVENT_RULE_SET,
+        builder.scopes,
+        cache,
+        'event.',
+        COMPILER_PROVISION_CACHE_PREFIX,
     ).check(module)
 
 # *** tests
@@ -210,6 +229,12 @@ def test_event_rule_set_is_exactly_event_section() -> None:
     Test that the event rule set is the single event section specification.
     '''
 
-    # The actor event dialect is one rule, not a checker subclass.
-    assert len(EVENT_RULE_SET) == 1
-    assert EVENT_RULE_SET[0].id == 'event.section'
+    # The event selector attaches one specification. It is not a checker subclass.
+    checker = ConformanceChecker(
+        {},
+        _provision_cache(),
+        'event.',
+        COMPILER_PROVISION_CACHE_PREFIX,
+    )
+    assert len(checker.provisions) == 1
+    assert checker.provisions[0].id == 'event.section'
