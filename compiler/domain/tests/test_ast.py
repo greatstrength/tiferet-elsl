@@ -3,6 +3,9 @@
 # *** imports
 
 # ** core
+import importlib
+import inspect
+import pkgutil
 from typing import List
 
 # ** infra
@@ -10,7 +13,26 @@ import pytest
 from pydantic import ValidationError
 
 # ** app
-from ..artifact import ArtifactDeclaration
+from ... import domain as domain_package
+from ... import mappers as mapper_package
+from ...mappers.artifact import (
+    ArtifactDeclarationAggregate,
+    ArtifactStatementAggregate,
+    SnippetStatementAggregate,
+)
+from ...mappers.ast import (
+    DeclarationAggregate,
+    ExpressionAggregate,
+    ParamListAggregate,
+    StatementAggregate,
+    TypeAggregate,
+)
+from ...mappers.semantic import ScopeAggregate
+from ..artifact import (
+    ArtifactDeclaration,
+    ArtifactStatement,
+    SnippetStatement,
+)
 from ..ast import (
     Declaration,
     ExprKind,
@@ -1250,3 +1272,258 @@ def test_no_next_pointer() -> None:
     for model in (Expression, Declaration, Statement, ParamList, Type):
         assert 'next' not in model.model_fields
         assert 'next' not in model.__annotations__
+
+# ** test: describe_defined_only_on_five_nodes
+def test_describe_defined_only_on_five_nodes() -> None:
+    '''
+    Test that describe is an instance method on the five node classes only.
+    '''
+
+    # The five node classes define describe(self) -> str, and it is not a property.
+    owners = {Declaration, Statement, Expression, Type, ParamList}
+    for owner in owners:
+        method = owner.__dict__['describe']
+        assert inspect.isfunction(method)
+        assert not isinstance(method, property)
+        assert not isinstance(method, staticmethod)
+        assert list(inspect.signature(method).parameters) == ['self']
+        assert method.__annotations__.get('return') is str
+
+    # Aggregates and artifact subclasses inherit the line. They do not define it.
+    for cls in (
+        TypeAggregate,
+        ParamListAggregate,
+        ExpressionAggregate,
+        DeclarationAggregate,
+        StatementAggregate,
+        ScopeAggregate,
+        ArtifactDeclaration,
+        ArtifactStatement,
+        SnippetStatement,
+        ArtifactDeclarationAggregate,
+        ArtifactStatementAggregate,
+        SnippetStatementAggregate,
+    ):
+        assert 'describe' not in cls.__dict__
+
+    # No other class in the domain or mapper packages defines describe.
+    found = set()
+    for package in (domain_package, mapper_package):
+        for module_info in pkgutil.walk_packages(package.__path__, package.__name__ + '.'):
+            if '.tests' in module_info.name:
+                continue
+            module = importlib.import_module(module_info.name)
+            for obj in vars(module).values():
+                if (
+                    inspect.isclass(obj)
+                    and obj.__module__ == module.__name__
+                    and 'describe' in obj.__dict__
+                ):
+                    found.add(obj)
+    assert found == owners
+
+    # The method is reached on the instance. It is not a package export.
+    assert 'describe' not in domain_package.__dict__
+
+# ** test: declaration_describe
+def test_declaration_describe() -> None:
+    '''
+    Test declaration diagnostic lines, including the empty name and docstring cut.
+    '''
+
+    # A named declaration describes, and encode stays a definition query.
+    named = Declaration(name='empty_mod')
+    assert named.describe() == '[Declaration] name=empty_mod'
+    assert named.encode() == 'Def(empty_mod, [])'
+    assert named.visit_role is None
+
+    # An empty name still describes. encode stays empty.
+    empty = Declaration(name='')
+    assert empty.describe() == '[Declaration] name='
+    assert empty.encode() == ''
+    assert empty.visit_role is None
+
+    # The type suffix is the kind token, not the type line.
+    typed = Declaration(name='Widget', type=Type(kind=TypeKind.CLASS, name='Widget'))
+    assert typed.describe() == '[Declaration] name=Widget : class'
+    assert '[Type]' not in typed.describe()
+    assert typed.encode() == 'Def(Widget, [])'
+    assert typed.visit_role is None
+    assert typed.type.type_name == 'Widget'
+
+    # A short docstring is quoted. Empty and missing docstrings are omitted.
+    noted = Declaration(name='noted', doc_string='hello')
+    assert noted.describe() == '[Declaration] name=noted doc="hello"'
+    assert Declaration(name='noted', doc_string='').describe() == '[Declaration] name=noted'
+    assert Declaration(name='noted').describe() == '[Declaration] name=noted'
+    assert Declaration(name='noted', doc_string='   ').describe() == '[Declaration] name=noted doc="   "'
+
+    # Forty characters are quoted in full. Forty-one are cut, then ellipsis.
+    forty = 'n' * 40
+    forty_one = 'n' * 41
+    full = Declaration(name='cut', doc_string=forty).describe()
+    cut = Declaration(name='cut', doc_string=forty_one).describe()
+    assert full == f'[Declaration] name=cut doc="{forty}"'
+    assert '...' not in full
+    assert cut == f'[Declaration] name=cut doc="{forty}..."'
+
+    # Each line has no indent and no trailing newline.
+    for line in (named.describe(), empty.describe(), typed.describe(), noted.describe(), full, cut):
+        assert line == line.lstrip()
+        assert not line.endswith('\n')
+
+# ** test: statement_describe
+def test_statement_describe() -> None:
+    '''
+    Test that a return statement describes as its kind token.
+    '''
+
+    # The diagnostic line is the kind value. encode and visit_role stay put.
+    returned = Statement(kind=StatementKind.RETURN)
+    assert returned.describe() == '[Statement] kind=return'
+    assert returned.encode() == 'Return()'
+    assert returned.visit_role == 'return'
+    assert returned.describe() == returned.describe().lstrip()
+    assert not returned.describe().endswith('\n')
+
+    # Artifact and snippet statements inherit the parent line.
+    assert ArtifactStatement(kind=StatementKind.ARTIFACT).describe() == '[Statement] kind=artifact'
+    assert SnippetStatement(kind=StatementKind.SNIPPET).describe() == '[Statement] kind=snippet'
+
+# ** test: expression_describe
+def test_expression_describe() -> None:
+    '''
+    Test expression diagnostic lines, including omitted suffixes and no child line.
+    '''
+
+    # A binary expression does not embed its child's line. encode still does.
+    added = Expression(kind=ExprKind.ADD, left=Expression(kind=ExprKind.NAME, name='a'))
+    assert added.describe() == '[Expression] kind=add'
+    assert '[Expression] kind=name' not in added.describe()
+    assert added.encode() == 'Add(a, )'
+    assert added.visit_role == 'add'
+
+    # Name precedes value. The string values 0 and False are not special-cased.
+    named = Expression(kind=ExprKind.NAME, name='alpha', value='bar')
+    assert named.describe() == '[Expression] kind=name name=alpha value=bar'
+    assert named.encode() == 'alpha'
+    assert named.visit_role == 'name'
+    assert Expression(kind=ExprKind.NAME, name='0', value='False').describe() == (
+        '[Expression] kind=name name=0 value=False'
+    )
+
+    # Empty name and value are omitted. encode stays empty.
+    blank = Expression(kind=ExprKind.NAME, name='', value='')
+    assert blank.describe() == '[Expression] kind=name'
+    assert blank.encode() == ''
+    assert blank.visit_role == 'name'
+
+    # Each line has no indent and no trailing newline.
+    for line in (added.describe(), named.describe(), blank.describe()):
+        assert line == line.lstrip()
+        assert not line.endswith('\n')
+
+# ** test: type_describe
+def test_type_describe() -> None:
+    '''
+    Test type diagnostic lines without replacing type_name.
+    '''
+
+    # A named class describes with its name. type_name stays the class name.
+    named = Type(kind=TypeKind.CLASS, name='Widget')
+    assert named.describe() == '[Type] kind=class name=Widget'
+    assert named.type_name == 'Widget'
+
+    # An unnamed class omits the name. type_name stays unknown.
+    unnamed = Type(kind=TypeKind.CLASS)
+    assert unnamed.describe() == '[Type] kind=class'
+    assert unnamed.type_name == 'unknown'
+    assert 'unknown' not in unnamed.describe()
+
+    # A primitive kind uses the enum value, including the None token.
+    integer = Type(kind=TypeKind.INT)
+    assert integer.describe() == '[Type] kind=int'
+    assert integer.type_name == 'int'
+    assert Type(kind=TypeKind.NONE).describe() == '[Type] kind=None'
+
+    # Each line has no indent and no trailing newline.
+    for line in (named.describe(), unnamed.describe(), integer.describe()):
+        assert line == line.lstrip()
+        assert not line.endswith('\n')
+
+# ** test: param_list_describe
+def test_param_list_describe() -> None:
+    '''
+    Test parameter diagnostic lines, including the domain required default.
+    '''
+
+    # Required and the domain default are suffixes. The tag is Param.
+    required = ParamList(name='x', required=True)
+    optional = ParamList(name='x')
+    assert required.describe() == '[Param] name=x required'
+    assert optional.describe() == '[Param] name=x optional'
+    assert optional.required is False
+
+    # A parameter type is not embedded in the parameter line.
+    typed = ParamList(name='x', type=Type(kind=TypeKind.INT), required=True)
+    assert typed.describe() == '[Param] name=x required'
+    assert '[Type]' not in typed.describe()
+
+    # Each line has no indent and no trailing newline.
+    for line in (required.describe(), optional.describe(), typed.describe()):
+        assert line == line.lstrip()
+        assert not line.endswith('\n')
+
+# ** test: artifact_declaration_describe_inherits_parent_line
+def test_artifact_declaration_describe_inherits_parent_line() -> None:
+    '''
+    Test that an artifact declaration inherits the declaration line and hides its role.
+    '''
+
+    # The exact artifact fixture matches the plain declaration line.
+    plain = Declaration(name='Widget')
+    artifact = ArtifactDeclaration(name='Widget')
+    assert artifact.describe() == plain.describe()
+    assert artifact.describe() == '[Declaration] name=Widget'
+    assert artifact.encode() == plain.encode()
+    assert artifact.visit_role is None
+
+    # A set artifact role stays off the diagnostic line.
+    method = ArtifactDeclaration(name='Widget', artifact_role='method')
+    assert method.describe() == plain.describe()
+    assert 'method' not in method.describe()
+    assert method.visit_role == 'method'
+    assert method.encode() == 'Def(Widget, [])'
+
+# ** test: describe_writes_nothing
+def test_describe_writes_nothing(capsys) -> None:
+    '''
+    Test that describe writes nothing to stdout.
+
+    :param capsys: The stdout capture fixture.
+    :type capsys: CaptureFixture
+    '''
+
+    # Call describe on the locked fixtures, including nodes that have children.
+    nodes = [
+        Declaration(name='empty_mod'),
+        Declaration(name=''),
+        Declaration(name='Widget', type=Type(kind=TypeKind.CLASS, name='Widget')),
+        Declaration(name='noted', doc_string='hello'),
+        Statement(kind=StatementKind.RETURN),
+        Expression(kind=ExprKind.ADD, left=Expression(kind=ExprKind.NAME, name='a')),
+        Expression(kind=ExprKind.NAME, name='alpha', value='bar'),
+        Expression(kind=ExprKind.NAME, name='', value=''),
+        Type(kind=TypeKind.CLASS, name='Widget'),
+        Type(kind=TypeKind.CLASS),
+        Type(kind=TypeKind.INT),
+        ParamList(name='x', required=True),
+        ParamList(name='x'),
+        ParamList(name='x', type=Type(kind=TypeKind.INT), required=True),
+        ArtifactDeclaration(name='Widget'),
+    ]
+    for node in nodes:
+        node.describe()
+
+    # Nothing was written.
+    assert capsys.readouterr().out == ''
