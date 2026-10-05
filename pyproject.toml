@@ -29,9 +29,6 @@ include = [
     "compiler*",
 ]
 
-[tool.setuptools.package-data]
-compiler = ["assets/*.yml"]
-
 [project.scripts]
 tiferet-compiler = "compiler.cli:main"
 
