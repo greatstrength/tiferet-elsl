@@ -7,9 +7,6 @@ from pathlib import Path
 
 # ** infra
 import pytest
-from tiferet_ly.repos.grammar import GrammarConfigRepository
-from tiferet_ly.repos.production import ProductionConfigRepository
-from tiferet_ly.repos.token import TokenConfigRepository
 
 # ** app
 from ...mappers.artifact import (
@@ -21,6 +18,11 @@ from ...mappers.ast import (
     ExpressionAggregate,
     StatementAggregate,
     TypeAggregate,
+)
+from .parser_test_helpers import (
+    load_grammar_rules,
+    load_production_rules,
+    load_token_rules,
 )
 from ..lexer import TiferetLexer
 from ..parser import TiferetParser
@@ -47,15 +49,9 @@ class _ParserHarness:
         '''
 
         # Catalogues stay on the harness. The adapter does not read them itself.
-        self.tokens = TokenConfigRepository(
-            token_config='compiler/assets/tokens.yml',
-        ).list()
-        self.grammars = GrammarConfigRepository(
-            grammar_config='compiler/assets/grammars.yml',
-        ).list()
-        self.productions = ProductionConfigRepository(
-            production_config='compiler/assets/productions.yml',
-        ).list()
+        self.tokens = load_token_rules()
+        self.grammars = load_grammar_rules()
+        self.productions = load_production_rules()
         self._parser = TiferetParser()
 
     # * method: parse_file

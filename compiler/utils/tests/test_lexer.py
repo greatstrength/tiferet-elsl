@@ -4,21 +4,14 @@
 
 # ** infra
 import pytest
-from tiferet_ly.repos.grammar import GrammarConfigRepository
-from tiferet_ly.repos.token import TokenConfigRepository
 
 # ** app
 from ... import assets as a
+from .parser_test_helpers import load_grammar_rules, load_token_rules
 from ...interfaces import LexerService
 from ..lexer import TiferetLexer
 
 # *** constants
-
-# ** constant: token_yaml_file
-TOKEN_YAML_FILE = 'compiler/assets/tokens.yml'
-
-# ** constant: grammar_yaml_file
-GRAMMAR_YAML_FILE = 'compiler/assets/grammars.yml'
 
 # ** constant: sample_source
 SAMPLE_SOURCE = '''"""Arithmetic events for the Tiferet dialect."""
@@ -183,12 +176,12 @@ def tokens():
     '''
     Load the declared token catalogue.
 
-    :return: The token rules from tokens.yml.
+    :return: The token rules.
     :rtype: list
     '''
 
-    # Load through the tiferet-ly token configuration repository.
-    return TokenConfigRepository(token_config=TOKEN_YAML_FILE).list()
+    # Map the group dict in declared order.
+    return load_token_rules()
 
 # ** fixture: grammars
 @pytest.fixture(scope='module')
@@ -196,12 +189,12 @@ def grammars():
     '''
     Load the declared grammar catalogue.
 
-    :return: The grammars from grammars.yml.
+    :return: The grammars.
     :rtype: list
     '''
 
-    # Load through the tiferet-ly grammar configuration repository.
-    return GrammarConfigRepository(grammar_config=GRAMMAR_YAML_FILE).list()
+    # Map the group dict in declared order.
+    return load_grammar_rules()
 
 # ** fixture: sample_text
 @pytest.fixture

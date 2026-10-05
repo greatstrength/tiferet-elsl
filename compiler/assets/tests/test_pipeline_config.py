@@ -264,8 +264,8 @@ def test_no_scan_event_or_compile_event_strings() -> None:
     Test that the pipeline YAML does not name retired event commands.
     '''
 
-    # Read the four pipeline files as text. Do not boot App or CLI.
-    for name in ('config.yml', 'feature.yml', 'cli.yml', 'errors.yml'):
+    # Read the three pipeline files as text. Do not boot App or CLI.
+    for name in ('config.yml', 'feature.yml', 'cli.yml'):
         text = (ASSETS_DIR / name).read_text(encoding='utf-8')
         assert 'scan.event' not in text
         assert 'compile.event' not in text

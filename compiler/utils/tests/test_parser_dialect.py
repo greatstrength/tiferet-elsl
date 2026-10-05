@@ -8,14 +8,11 @@ from pathlib import Path
 
 # ** infra
 import pytest
-import yaml
 from tiferet.interfaces.core import ServiceError
-from tiferet_ly.repos.grammar import GrammarConfigRepository
-from tiferet_ly.repos.production import ProductionConfigRepository
-from tiferet_ly.repos.token import TokenConfigRepository
 from tiferet_ly.utils.translation import RuleTranslator
 
 # ** app
+from ...assets.production import COMPILER_DEFAULT_PRODUCTIONS
 from ...domain.ast import ExprKind, StatementKind, TypeKind
 from ..lexer import TiferetLexer
 from ..parser import TiferetParser
@@ -26,6 +23,9 @@ from .parser_test_helpers import (
     get_group,
     get_member,
     get_section,
+    load_grammar_rules,
+    load_production_rules,
+    load_token_rules,
 )
 
 # *** constants
@@ -1530,27 +1530,26 @@ _ORDERED_PRODUCTIONS = (
 # ** function: load_document
 def load_document() -> dict:
     '''
-    Load the declared production catalogue document.
+    Load the declared production catalogue.
 
-    :return: The YAML document.
+    :return: The production group dict.
     :rtype: dict
     '''
 
-    # Read the production catalogue with a safe YAML loader.
-    with (_ASSETS_DIR / 'productions.yml').open(encoding='utf-8') as handle:
-        return yaml.safe_load(handle)
+    # The group dict is the catalogue. Do not wrap a document key.
+    return COMPILER_DEFAULT_PRODUCTIONS
 
 # ** function: load_productions
-def load_productions() -> list:
+def load_productions() -> dict:
     '''
-    Load the declared production_rules list.
+    Load the declared production catalogue.
 
-    :return: The production rule list.
-    :rtype: list
+    :return: The production group dict.
+    :rtype: dict
     '''
 
-    # Return the single catalogue list.
-    return load_document()['production_rules']
+    # Readers use the group dict, not a production_rules list.
+    return load_document()
 
 # ** function: expand_productions
 def expand_productions() -> list:
@@ -1561,8 +1560,8 @@ def expand_productions() -> list:
     :rtype: list
     '''
 
-    # Expand each single-key production map.
-    return [next(iter(item.items())) for item in load_productions()]
+    # Declared order is the group-dict insertion order.
+    return list(load_productions().items())
 
 # ** function: rewrite_table
 def rewrite_table() -> dict:
@@ -1584,13 +1583,13 @@ def rewrite_table() -> dict:
 # ** test: production_catalogue_count
 def test_production_catalogue_count() -> None:
     '''
-    Test that production_rules has 285 items.
+    Test that the production catalogue has 285 items.
     '''
 
-    # The document has one top-level list of the declared length.
-    document = load_document()
-    assert list(document) == ['production_rules']
-    assert len(document['production_rules']) == 285
+    # The group dict has the declared length. It is not a document wrapper.
+    productions = load_productions()
+    assert len(productions) == 285
+    assert 'production_rules' not in productions
 
 # ** test: production_catalogue_identifiers
 def test_production_catalogue_identifiers() -> None:
@@ -1602,8 +1601,7 @@ def test_production_catalogue_identifiers() -> None:
     pairs = expand_productions()
     names = [name for name, _body in pairs]
 
-    # Each item is a single-key map in §4.5 order.
-    assert all(len(item) == 1 for item in load_productions())
+    # Declared order is the group-dict insertion order.
     assert names == [name for name, _spec, _action in _ORDERED_PRODUCTIONS]
 
 # ** test: production_catalogue_grammar_id
@@ -1749,15 +1747,9 @@ class ParserHarness:
         '''
 
         # Catalogues stay on the harness. The adapter does not read them itself.
-        self.tokens = TokenConfigRepository(
-            token_config='compiler/assets/tokens.yml',
-        ).list()
-        self.grammars = GrammarConfigRepository(
-            grammar_config='compiler/assets/grammars.yml',
-        ).list()
-        self.productions = ProductionConfigRepository(
-            production_config='compiler/assets/productions.yml',
-        ).list()
+        self.tokens = load_token_rules()
+        self.grammars = load_grammar_rules()
+        self.productions = load_production_rules()
         self._parser = TiferetParser()
 
     # * method: parse
