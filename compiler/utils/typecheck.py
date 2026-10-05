@@ -75,7 +75,8 @@ class ConformanceChecker(StatementWalker):
         Check one module declaration and return every collected finding.
 
         Instantiation findings come first, including when the module scope
-        is missing. Walk findings stay on the collection.
+        is missing. The module hook runs after that scope is pushed and
+        before the body walk. Walk findings stay on the collection.
 
         :param module_decl: The module declaration to walk.
         :type module_decl: Declaration
@@ -93,8 +94,9 @@ class ConformanceChecker(StatementWalker):
         if module_scope is None:
             return list(self.provision_findings) + self._finding_collection.to_list()
 
-        # Walk the body inside the module scope, then take the findings.
+        # Section order sees the module declaration before its body is walked.
         self.scope_stack.append(module_scope)
+        self.apply('module', module_decl)
         if module_decl.code:
             self.walk_statements(module_decl.code)
         return list(self.provision_findings) + self._finding_collection.to_list()
@@ -255,11 +257,16 @@ class ConformanceChecker(StatementWalker):
         '''
         Walk a class body in its registered child scope.
 
+        The class hook runs before the body walk.
+
         :param decl: The class declaration.
         :type decl: Declaration
         :return: None
         :rtype: None
         '''
+
+        # Member order sees the class declaration before its body is walked.
+        self.apply('class', decl)
 
         # A missing child scope does not push. The body is still walked.
         with self.entering_child_scope(decl.name):

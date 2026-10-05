@@ -61,6 +61,18 @@ INVALID_METHOD_RETURN_TYPE_ID = 'INVALID_METHOD_RETURN_TYPE'
 # ** constant: event_missing_execute_id
 EVENT_MISSING_EXECUTE_ID = 'EVENT_MISSING_EXECUTE'
 
+# ** constant: artifact_section_order_id
+ARTIFACT_SECTION_ORDER_ID = 'ARTIFACT_SECTION_ORDER'
+
+# ** constant: artifact_member_order_id
+ARTIFACT_MEMBER_ORDER_ID = 'ARTIFACT_MEMBER_ORDER'
+
+# ** constant: invalid_property_member_id
+INVALID_PROPERTY_MEMBER_ID = 'INVALID_PROPERTY_MEMBER'
+
+# ** constant: property_not_descriptive_id
+PROPERTY_NOT_DESCRIPTIVE_ID = 'PROPERTY_NOT_DESCRIPTIVE'
+
 # *** constants (models)
 
 # ** constant: text_extraction_failed_data
@@ -207,6 +219,38 @@ EVENT_MISSING_EXECUTE_DATA = create_default_error_data(
     ],
 )
 
+# ** constant: artifact_section_order_data
+ARTIFACT_SECTION_ORDER_DATA = create_default_error_data(
+    'Artifact Section Order',
+    [
+        (EN_US, "Section '{section_name}' is out of artifact order after '{prior_section}'. The plain section must precede its sub-group."),
+    ],
+)
+
+# ** constant: artifact_member_order_data
+ARTIFACT_MEMBER_ORDER_DATA = create_default_error_data(
+    'Artifact Member Order',
+    [
+        (EN_US, "Class '{class_name}' member '{member_name}' role '{role}' follows '{prior_role}'."),
+    ],
+)
+
+# ** constant: invalid_property_member_data
+INVALID_PROPERTY_MEMBER_DATA = create_default_error_data(
+    'Invalid Property Member',
+    [
+        (EN_US, "Property member '{member_name}' is not a legal descriptive property. A write is an ordinary method."),
+    ],
+)
+
+# ** constant: property_not_descriptive_data
+PROPERTY_NOT_DESCRIPTIVE_DATA = create_default_error_data(
+    'Property Not Descriptive',
+    [
+        (EN_US, "Property '{member_name}' assigns through self and is not descriptive."),
+    ],
+)
+
 # *** constants (groups)
 
 # ** constant: compiler_default_errors
@@ -229,4 +273,8 @@ COMPILER_DEFAULT_ERRORS = {
     METHOD_MISSING_SELF_ID: METHOD_MISSING_SELF_DATA,
     INVALID_METHOD_RETURN_TYPE_ID: INVALID_METHOD_RETURN_TYPE_DATA,
     EVENT_MISSING_EXECUTE_ID: EVENT_MISSING_EXECUTE_DATA,
+    ARTIFACT_SECTION_ORDER_ID: ARTIFACT_SECTION_ORDER_DATA,
+    ARTIFACT_MEMBER_ORDER_ID: ARTIFACT_MEMBER_ORDER_DATA,
+    INVALID_PROPERTY_MEMBER_ID: INVALID_PROPERTY_MEMBER_DATA,
+    PROPERTY_NOT_DESCRIPTIVE_ID: PROPERTY_NOT_DESCRIPTIVE_DATA,
 }

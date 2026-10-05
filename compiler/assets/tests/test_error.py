@@ -151,6 +151,26 @@ _ERROR_ROWS = (
         'Event Missing Execute',
         "Event '{event_name}' class '{class_name}' must declare an 'execute' method",
     ),
+    (
+        'ARTIFACT_SECTION_ORDER',
+        'Artifact Section Order',
+        "Section '{section_name}' is out of artifact order after '{prior_section}'. The plain section must precede its sub-group.",
+    ),
+    (
+        'ARTIFACT_MEMBER_ORDER',
+        'Artifact Member Order',
+        "Class '{class_name}' member '{member_name}' role '{role}' follows '{prior_role}'.",
+    ),
+    (
+        'INVALID_PROPERTY_MEMBER',
+        'Invalid Property Member',
+        "Property member '{member_name}' is not a legal descriptive property. A write is an ordinary method.",
+    ),
+    (
+        'PROPERTY_NOT_DESCRIPTIVE',
+        'Property Not Descriptive',
+        "Property '{member_name}' assigns through self and is not descriptive.",
+    ),
 )
 
 # *** tests
@@ -158,7 +178,7 @@ _ERROR_ROWS = (
 # ** test: compiler_default_errors_match_declared_rows
 def test_compiler_default_errors_match_declared_rows() -> None:
     '''
-    Test that the error catalog has the eighteen declared rows.
+    Test that the error catalog has the twenty-two declared rows.
     '''
 
     # Insertion order is the declared order, not a sorted order.

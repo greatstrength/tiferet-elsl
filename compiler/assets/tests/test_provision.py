@@ -71,6 +71,30 @@ _FORBIDDEN_IMPORTS = (
 # ** constant: rows
 _ROWS = (
     (
+        'common.section_order',
+        'specification',
+        'compiler.utils.core',
+        'SectionOrderSpecification',
+        'module',
+        {},
+    ),
+    (
+        'common.member_order',
+        'specification',
+        'compiler.utils.core',
+        'MemberOrderSpecification',
+        'class',
+        {},
+    ),
+    (
+        'common.property_member',
+        'specification',
+        'compiler.utils.core',
+        'PropertyMemberSpecification',
+        'member',
+        {},
+    ),
+    (
         'common.import_group',
         'specification',
         'compiler.utils.core',
@@ -677,12 +701,12 @@ _ROWS = (
 # ** test: compiler_default_provisions_match_inventory
 def test_compiler_default_provisions_match_inventory() -> None:
     '''
-    Test that the catalog is the 49 employed rows, in list order.
+    Test that the catalog is the 52 employed rows, in list order.
     '''
 
     # Insertion order is the inventory order, not a sorted order.
     assert list(COMPILER_DEFAULT_PROVISIONS) == [row[0] for row in _ROWS]
-    assert len(COMPILER_DEFAULT_PROVISIONS) == 49
+    assert len(COMPILER_DEFAULT_PROVISIONS) == 52
 
     # Each value is the five registration fields. The id stays the key.
     for key, kind, module_path, class_name, applies_to, parameters in _ROWS:

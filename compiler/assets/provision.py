@@ -9,6 +9,27 @@ from .core import create_default_provision_data
 
 # ** constant: compiler_default_provisions
 COMPILER_DEFAULT_PROVISIONS = {
+    'common.section_order': create_default_provision_data(
+        kind='specification',
+        applies_to='module',
+        module_path='compiler.utils.core',
+        class_name='SectionOrderSpecification',
+        parameters={},
+    ),
+    'common.member_order': create_default_provision_data(
+        kind='specification',
+        applies_to='class',
+        module_path='compiler.utils.core',
+        class_name='MemberOrderSpecification',
+        parameters={},
+    ),
+    'common.property_member': create_default_provision_data(
+        kind='specification',
+        applies_to='member',
+        module_path='compiler.utils.core',
+        class_name='PropertyMemberSpecification',
+        parameters={},
+    ),
     'common.import_group': create_default_provision_data(
         kind='specification',
         applies_to='artifact_header',
