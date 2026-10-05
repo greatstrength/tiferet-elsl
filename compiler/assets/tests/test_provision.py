@@ -801,6 +801,10 @@ def test_provision_source_stays_dependency_light() -> None:
     source = _PROVISION_PATH.read_text(encoding='utf-8')
     tree = ast.parse(source)
 
+    # Preamble order is imports, constants, then functions.
+    assert source.index('# *** imports') < source.index('# *** constants')
+    assert source.index('# *** constants') < source.index('# *** functions')
+
     # The module defines the factory and the catalog, and no class.
     assigned = {
         target.id
