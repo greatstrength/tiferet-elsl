@@ -269,7 +269,7 @@ def expected_arguments():
             component_argument(),
         ],
         'compile.ast': [
-            source_file_argument('Path of the JSON AST file.'),
+            source_file_argument(description='Path of the JSON AST file.'),
             output_argument(),
             output_format_argument(
                 'Serialization format. Defaults to auto. Choices are yaml, json, and auto.',
