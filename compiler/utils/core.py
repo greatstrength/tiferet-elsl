@@ -1068,8 +1068,8 @@ class SectionOrderSpecification(Specification):
 
     # * method: _header_findings
     def _header_findings(self, header: Declaration, kind: Optional[str],
-            qualifier: Optional[str], rank: int, highest: int,
-            prior_name: Optional[str], qualified: set) -> List[Dict]:
+                         qualifier: Optional[str], rank: int, highest: int,
+                         prior_name: Optional[str], qualified: set) -> List[Dict]:
         '''
         Record rank and plain-before-subgroup findings for one header.
 
@@ -1250,7 +1250,7 @@ class MemberOrderSpecification(Specification):
 
     # * method: _rank
     def _rank(self, role: str, qualifier: Optional[str],
-            tester: bool) -> Optional[int]:
+              tester: bool) -> Optional[int]:
         '''
         Rank one role on the active table.
 
@@ -1318,7 +1318,7 @@ class MemberOrderSpecification(Specification):
 
     # * method: _finding
     def _finding(self, class_decl: Any, member: Declaration,
-            label: str, prior_label: Optional[str]) -> Dict:
+                 label: str, prior_label: Optional[str]) -> Dict:
         '''
         Build a member-order finding against the later member.
 
@@ -1449,7 +1449,7 @@ class PropertyMemberSpecification(Specification):
 
     # * method: _append_location_finding
     def _append_location_finding(self, findings: List[Dict], decl: Declaration,
-            name: str, context: Any) -> None:
+                                 name: str, context: Any) -> None:
         '''
         Record a property that is not on a model, mapper, or context.
 
@@ -1478,8 +1478,8 @@ class PropertyMemberSpecification(Specification):
 
     # * method: _append_form_findings
     def _append_form_findings(self, findings: List[Dict], decl: Declaration,
-            name: str, role: str, qualifier: Optional[str],
-            decorators: List[str]) -> None:
+                              name: str, role: str, qualifier: Optional[str],
+                              decorators: List[str]) -> None:
         '''
         Record label, decorator, and caller-parameter misses.
 
@@ -1547,7 +1547,7 @@ class PropertyMemberSpecification(Specification):
 
     # * method: _append_descriptive_finding
     def _append_descriptive_finding(self, findings: List[Dict],
-            decl: Declaration, name: str) -> None:
+                                    decl: Declaration, name: str) -> None:
         '''
         Record a property body that assigns through self.
 
