@@ -3,121 +3,193 @@
 # *** imports
 
 # ** core
-import tempfile
+import argparse
+import sys
 from typing import Any
-from importlib.resources import files
 
 # ** infra
-import yaml
+from tiferet.assets import TiferetError
 
 # ** app
-from tiferet import CLI
+from .assets.cli import COMPILER_DEFAULT_COMMANDS
+from .blueprints import build_compiler_session
+
+# *** constants
+
+# ** constant: unknown_compiler_command
+UNKNOWN_COMPILER_COMMAND = 'UNKNOWN_COMPILER_COMMAND'
+
+# ** constant: command_step
+COMMAND_STEP = {
+    'scan.module': 'scan',
+    'parse.module': 'parse',
+    'semantic.module': 'semantic',
+    'compile.module': 'compile',
+    'compile.ast': 'compile-from-ast',
+}
+
+# ** constant: run_kwarg_names
+_RUN_KWARG_NAMES = (
+    'component',
+    'source_file',
+    'output',
+    'output_format',
+    'optimization',
+    'include_tokens',
+    'include_ast',
+    'extract',
+)
 
 # *** functions
 
-# ** function: asset_path
-def asset_path(filename: str) -> str:
+# ** function: _argument_kwargs
+def _argument_kwargs(argument: dict) -> dict:
     '''
-    Resolve a compiler asset basename from the installed package.
+    Translate one catalog argument into argparse keyword arguments.
 
-    ``filename`` is a basename only, such as ``config.yml``, not a
-    repository-relative path.
+    :param argument: A catalog argument row.
+    :type argument: dict
+    :return: Keyword arguments for add_argument.
+    :rtype: dict
+    '''
 
-    :param filename: The asset file name under ``compiler/assets``.
-    :type filename: str
-    :return: The filesystem path of the packaged asset.
+    # Help text is the catalog description. A bool flag consumes no value.
+    kwargs = {}
+    if argument.get('description') is not None:
+        kwargs['help'] = argument['description']
+    if argument.get('type') == 'bool':
+        kwargs['action'] = 'store_true'
+        return kwargs
+
+    # Value-bearing fields stay omitted when the catalog did not declare them.
+    if argument.get('choices') is not None:
+        kwargs['choices'] = argument['choices']
+    if argument.get('default') is not None:
+        kwargs['default'] = argument['default']
+    if argument.get('required') is not None:
+        kwargs['required'] = argument['required']
+    return kwargs
+
+# ** function: _forwarded_kwargs
+def _forwarded_kwargs(parsed: dict) -> dict:
+    '''
+    Keep parsed values the session already forwards.
+
+    :param parsed: The argparse namespace as a dictionary.
+    :type parsed: dict
+    :return: Run kwargs. Absent values stay omitted.
+    :rtype: dict
+    '''
+
+    # Rename the short optimization flag. Do not pass O.
+    values = dict(parsed)
+    if 'O' in values:
+        values['optimization'] = values['O']
+
+    # Pass a key only when the parsed value is not None.
+    forwarded = {}
+    for name in _RUN_KWARG_NAMES:
+        if name in values and values[name] is not None:
+            forwarded[name] = values[name]
+    return forwarded
+
+# ** function: translate_command
+def translate_command(command_id: str) -> str:
+    '''
+    Translate one catalog command id into an asked step.
+
+    :param command_id: A compiler catalog command id.
+    :type command_id: str
+    :return: The asked step.
     :rtype: str
     '''
 
-    # Resolve through the installed package so the path does not depend on CWD.
-    return str(files('compiler').joinpath('assets', filename))
+    # Only the five catalog ids are accepted. Asked steps are not keys.
+    if command_id not in COMMAND_STEP:
+        TiferetError.raise_error(
+            UNKNOWN_COMPILER_COMMAND,
+            message=f'Unknown compiler command: {command_id!r}.',
+            command_id=command_id,
+        )
 
-# ** function: rewrite_asset_paths
-def rewrite_asset_paths(data: Any, assets_dir: str) -> Any:
+    # Return the asked step. Do not pass the catalog id onward.
+    return COMMAND_STEP[command_id]
+
+# ** function: run_catalog_command
+def run_catalog_command(command_id: str, **kwargs) -> Any:
     '''
-    Replace catalog ``compiler/assets/`` prefixes with an installed assets directory.
+    Translate a catalog id and run the asked step.
 
-    :param data: A loaded configuration value.
-    :type data: Any
-    :param assets_dir: The installed ``compiler/assets`` directory.
-    :type assets_dir: str
-    :return: The value with catalog asset prefixes rewritten.
+    :param command_id: A compiler catalog command id.
+    :type command_id: str
+    :param kwargs: Values forwarded to the session run.
+    :type kwargs: dict
+    :return: The session run result.
     :rtype: Any
     '''
 
-    # Replace a catalog asset path and leave unrelated strings unchanged.
-    if isinstance(data, str):
-        prefix = 'compiler/assets/'
-        if data.startswith(prefix):
-            return assets_dir + '/' + data[len(prefix):]
-        return data
+    # Translate before the session is built so a miss never reaches run.
+    step = translate_command(command_id)
 
-    # Rewrite mappings recursively, including string keys.
-    if isinstance(data, dict):
-        return {
-            rewrite_asset_paths(key, assets_dir): rewrite_asset_paths(value, assets_dir)
-            for key, value in data.items()
-        }
+    # Build a session with the default cache and resolver.
+    session = build_compiler_session()
 
-    # Rewrite sequences recursively.
-    if isinstance(data, list):
-        return [
-            rewrite_asset_paths(item, assets_dir)
-            for item in data
-        ]
+    # Run the asked step. Do not pass the catalog id.
+    return session.run(step, **kwargs)
 
-    # Leave numbers, booleans, and nulls unchanged.
-    return data
-
-# ** function: resolve_boot_config
-def resolve_boot_config() -> str:
+# ** function: parse_compiler_argv
+def parse_compiler_argv(argv: list | None = None) -> tuple:
     '''
-    Write a temporary session config whose asset paths are package-absolute.
+    Parse argv into a catalog command id and run kwargs.
 
-    :return: The path of the rewritten YAML file.
-    :rtype: str
+    :param argv: Explicit argv. Defaults to sys.argv[1:].
+    :type argv: list | None
+    :return: The catalog command id and the forwarded kwargs.
+    :rtype: tuple
     '''
 
-    # Load the packaged session catalog, not a CWD-relative config.yml.
-    with open(asset_path('config.yml'), encoding='utf-8') as handle:
-        data = yaml.safe_load(handle)
+    # Default argv is the process arguments, not a config file.
+    if argv is None:
+        argv = sys.argv[1:]
 
-    # Rewrite every catalog asset prefix onto the installed assets directory.
-    assets_dir = str(files('compiler').joinpath('assets'))
-    rewritten = rewrite_asset_paths(data, assets_dir)
+    # Build one parser from each catalog row's group, key, and arguments.
+    parser = argparse.ArgumentParser()
+    group_parsers = parser.add_subparsers(dest='group', required=True)
+    grouped = {}
+    for command in COMPILER_DEFAULT_COMMANDS.values():
+        grouped.setdefault(command['group_key'], []).append(command)
+    for group_key, commands in grouped.items():
+        group_parser = group_parsers.add_parser(group_key)
+        command_parsers = group_parser.add_subparsers(dest='command', required=True)
+        for command in commands:
+            command_parser = command_parsers.add_parser(
+                command['key'],
+                help=command.get('description'),
+            )
+            for argument in command.get('arguments') or []:
+                command_parser.add_argument(
+                    *argument['name_or_flags'],
+                    **_argument_kwargs(argument),
+                )
 
-    # Persist the rewritten mapping so the CLI can open it by path.
-    handle = tempfile.NamedTemporaryFile(
-        suffix='.yml',
-        delete=False,
-        mode='w',
-        encoding='utf-8',
-    )
-    try:
-        yaml.safe_dump(rewritten, handle)
-    finally:
-        handle.close()
-
-    # Return the temp path. The file must outlive this function.
-    return handle.name
+    # The catalog id is the join. Run kwargs are the forwarded values.
+    parsed = vars(parser.parse_args(argv))
+    command_id = f"{parsed['group']}.{parsed['command']}"
+    return command_id, _forwarded_kwargs(parsed)
 
 # ** function: main
-def main() -> None:
+def main(argv: list | None = None) -> None:
     '''
-    Entry point for the tiferet-compiler console script.
+    Parse compiler argv and run the translated step.
 
-    Resolves compiler assets from the installed package and delegates
-    to the Tiferet CLI session ``compiler_cli``.
-
+    :param argv: Explicit argv. Defaults to sys.argv[1:].
+    :type argv: list | None
     :return: None
     :rtype: None
     '''
 
-    # Resolve session config so asset paths are package-absolute.
-    app_config = resolve_boot_config()
+    # Parse the catalog command. Do not open a config file.
+    command_id, kwargs = parse_compiler_argv(argv)
 
-    # Dispatch argv through the compiler CLI session. Do not change CWD.
-    CLI(
-        'compiler_cli',
-        app_config=app_config,
-    )
+    # Translate and run. Do not pass the catalog id as a step.
+    run_catalog_command(command_id, **kwargs)

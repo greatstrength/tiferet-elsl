@@ -85,12 +85,13 @@ _FORBIDDEN_BLUEPRINT_NAMES = (
 # ** test: build_cache_exports_only_itself
 def test_build_cache_exports_only_itself() -> None:
     '''
-    Test that the blueprint package exports one function.
+    Test that the blueprint package exports the cache and session builders.
     '''
 
-    # The public name is build_cache. There is no App or CLI alias.
+    # The public names are the two builders. There is no App or CLI alias.
     assert blueprint_all == [
         'build_cache',
+        'build_compiler_session',
     ]
     assert not hasattr(compiler, 'build_cache')
     assert not hasattr(compiler.blueprints, 'App')
