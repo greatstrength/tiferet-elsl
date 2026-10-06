@@ -392,12 +392,12 @@ def test_command_arguments_are_not_shared() -> None:
             assert all(arg is not prior for prior in seen)
             seen.append(arg)
 
-# ** test: console_entry_does_not_open_config
-def test_console_entry_does_not_open_config() -> None:
+# ** test: console_entry_still_opens_config
+def test_console_entry_still_opens_config() -> None:
     '''
     Test that the console entry does not open config.yml.
     '''
 
-    # The session repair removes the packaged config open.
+    # The packaged config open is absent from the console entry.
     source = Path(__file__).resolve().parents[2] / 'cli.py'
     assert "asset_path('config.yml')" not in source.read_text(encoding='utf-8')

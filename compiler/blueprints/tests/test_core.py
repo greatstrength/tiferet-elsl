@@ -82,10 +82,10 @@ _FORBIDDEN_BLUEPRINT_NAMES = (
 
 # *** tests
 
-# ** test: build_cache_exports_only_itself
-def test_build_cache_exports_only_itself() -> None:
+# ** test: blueprint_exports_cache_and_session
+def test_blueprint_exports_cache_and_session() -> None:
     '''
-    Test that the blueprint package exports the cache and session builders.
+    Test that __all__ is build_cache and build_compiler_session.
     '''
 
     # The public names are the two builders. There is no App or CLI alias.

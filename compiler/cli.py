@@ -42,6 +42,29 @@ _RUN_KWARG_NAMES = (
 
 # *** functions
 
+# ** function: _group_list
+def _group_list(grouped: dict, group_key: str, default: list = None) -> list:
+    '''
+    Return the command list for one group, creating it when absent.
+
+    ``dict.setdefault`` does not accept a keyword, so the optional list is
+    passed here.
+
+    :param grouped: Group key to command rows.
+    :type grouped: dict
+    :param group_key: The catalog group key.
+    :type group_key: str
+    :param default: The list to store when the group is absent.
+    :type default: list
+    :return: The command list for the group.
+    :rtype: list
+    '''
+
+    # Create the group list only when this key has not been seen.
+    if group_key not in grouped:
+        grouped[group_key] = [] if default is None else default
+    return grouped[group_key]
+
 # ** function: _argument_kwargs
 def _argument_kwargs(argument: dict) -> dict:
     '''
@@ -157,7 +180,7 @@ def parse_compiler_argv(argv: list | None = None) -> tuple:
     group_parsers = parser.add_subparsers(dest='group', required=True)
     grouped = {}
     for command in COMPILER_DEFAULT_COMMANDS.values():
-        grouped.setdefault(command['group_key'], []).append(command)
+        _group_list(grouped, command['group_key'], default=[]).append(command)
     for group_key, commands in grouped.items():
         group_parser = group_parsers.add_parser(group_key)
         command_parsers = group_parser.add_subparsers(dest='command', required=True)
@@ -173,7 +196,7 @@ def parse_compiler_argv(argv: list | None = None) -> tuple:
                 )
 
     # The catalog id is the join. Run kwargs are the forwarded values.
-    parsed = vars(parser.parse_args(argv))
+    parsed = vars(parser.parse_args(args=argv))
     command_id = f"{parsed['group']}.{parsed['command']}"
     return command_id, _forwarded_kwargs(parsed)
 
@@ -189,7 +212,7 @@ def main(argv: list | None = None) -> None:
     '''
 
     # Parse the catalog command. Do not open a config file.
-    command_id, kwargs = parse_compiler_argv(argv)
+    command_id, kwargs = parse_compiler_argv(argv=argv)
 
     # Translate and run. Do not pass the catalog id as a step.
     run_catalog_command(command_id, **kwargs)
