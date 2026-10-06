@@ -134,13 +134,17 @@ class CompilerFeatureContext(FeatureContext):
                 component=component,
             )
 
-        # Scan emits the lexical return and stops.
+        # Scan tokenizes, then emits that return and stops.
         if step == 'scan':
+
+            # Lexical analysis returns the object the emit receives.
             tokens = self._resolve_and_execute(
                 step,
                 'perform_lexical_analysis_event',
                 **_present_keys(kwargs, ('source_file',)),
             )
+
+            # Emit that return. Do not replace it.
             return self._resolve_and_execute(
                 step,
                 'emit_scan_result_event',
@@ -156,11 +160,15 @@ class CompilerFeatureContext(FeatureContext):
                 **_present_keys(kwargs, ('source_file',)),
             )
         else:
+
+            # Lexical analysis returns the tokens syntactic analysis consumes.
             tokens = self._resolve_and_execute(
                 step,
                 'perform_lexical_analysis_event',
                 **_present_keys(kwargs, ('source_file',)),
             )
+
+            # Syntactic analysis receives that object, not an emit payload.
             ast = self._resolve_and_execute(
                 step,
                 'perform_syntactic_analysis_event',
@@ -260,7 +268,7 @@ class CompilerFeatureContext(FeatureContext):
         :rtype: tuple
         '''
 
-        # Analysis and both checks see the same cache and the one prefix.
+        # Semantic analysis receives the ast, the cache, and the one prefix.
         semantic = self._resolve_and_execute(
             step,
             'perform_semantic_analysis_event',
@@ -268,6 +276,8 @@ class CompilerFeatureContext(FeatureContext):
             cache=self.cache,
             provision_prefix=COMPILER_PROVISION_CACHE_PREFIX,
         )
+
+        # Common conformance receives that ast and the semantic return.
         common = self._resolve_and_execute(
             step,
             'check_common_conformance_event',
@@ -276,6 +286,8 @@ class CompilerFeatureContext(FeatureContext):
             cache=self.cache,
             provision_prefix=COMPILER_PROVISION_CACHE_PREFIX,
         )
+
+        # One dialect receives the common return as findings.
         findings = self._resolve_and_execute(
             step,
             DIALECT_SERVICE_ID[component],

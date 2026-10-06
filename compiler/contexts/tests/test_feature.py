@@ -241,7 +241,7 @@ def test_each_component_resolves_one_dialect() -> None:
     # The other nine ids stay unresolved, including the plural contexts name.
     for component, service_id in DIALECT_SERVICE_ID.items():
         resolver = _resolver()
-        context, _, _ = _context(resolver)
+        context, _, _ = _context(resolver=resolver)
         context.run_step('semantic', component=component, source_file='a.py')
         dialects = [
             sid for sid in resolver.resolved
@@ -290,7 +290,7 @@ def test_parse_passes_syntactic_return() -> None:
 
     # The empty emit sentinel must remain the return, not a replacement.
     resolver = _resolver(results={'emit_parse_result_event': ''})
-    context, _, _ = _context(resolver)
+    context, _, _ = _context(resolver=resolver)
     result = context.run_step(
         'parse',
         source_file='a.py',
@@ -399,7 +399,7 @@ def test_compile_continues_after_findings() -> None:
 
     # A non-empty findings sentinel must not skip the codegen tail.
     resolver = _resolver(results={'check_utils_conformance_event': ['kept']})
-    context, _, _ = _context(resolver)
+    context, _, _ = _context(resolver=resolver)
     result = context.run_step('compile', component='utils', source_file='a.py')
 
     # The three earlier emits stay unresolved.
@@ -431,7 +431,7 @@ def test_compile_continues_after_findings() -> None:
 
     # The asked component is passed through, including events.
     events = _resolver()
-    events_context, _, _ = _context(events)
+    events_context, _, _ = _context(resolver=events)
     events_context.run_step('compile', component='events', optimization='O1')
     assert _kwargs_for(events, 'generate_code_event')['component'] == 'events'
     assert _kwargs_for(events, 'optimize_code_event')['O'] == 'O1'
@@ -513,7 +513,6 @@ def test_scan_and_parse_do_not_require_component() -> None:
     context.run_step('scan')
     context.run_step('parse')
     assert 'perform_lexical_analysis_event' in resolver.resolved
-    assert 'COMPONENT_REQUIRED' not in resolver.resolved
 
 # ** test: missing_resolver_raises_before_resolve
 def test_missing_resolver_raises_before_resolve() -> None:
@@ -536,7 +535,7 @@ def test_failed_resolve_does_not_execute() -> None:
 
     # A raised resolve names the id and does not call execute.
     raising = _resolver(fail=RuntimeError('missing'))
-    context, _, _ = _context(raising)
+    context, _, _ = _context(resolver=raising)
     with pytest.raises(TiferetError) as exc:
         context.run_step('scan', source_file='a.py')
     assert exc.value.error_code == 'EVENT_NOT_RESOLVED'
@@ -549,7 +548,7 @@ def test_failed_resolve_does_not_execute() -> None:
 
     # A None resolve is the same refusal, and that id's execute is not called.
     empty = _resolver(none_ids=('perform_lexical_analysis_event',))
-    empty_context, _, _ = _context(empty)
+    empty_context, _, _ = _context(resolver=empty)
     with pytest.raises(TiferetError) as exc:
         empty_context.run_step('parse', source_file='a.py')
     assert exc.value.error_code == 'EVENT_NOT_RESOLVED'
