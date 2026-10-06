@@ -984,6 +984,774 @@ class StatementWalker:
         # Unoverridden statement kinds silently no-op.
         del stmt
 
+# ** class: section_order_specification
+class SectionOrderSpecification(Specification):
+    '''
+    Refuse a module whose tier-1 sections are not in the style order.
+
+    A missing section is not a finding. Construct groups share one rank and
+    do not order against each other.
+    '''
+
+    # * attribute: preamble_ranks
+    PREAMBLE_RANKS: ClassVar[Dict[str, int]] = {
+        'imports': 0,
+        'constants': 1,
+        'functions': 2,
+        'classes': 3,
+        'fixtures': 4,
+        'tests': 5,
+        'testers': 6,
+    }
+
+    # * attribute: construct_rank
+    CONSTRUCT_RANK: ClassVar[int] = 7
+
+    # * method: evaluate
+    def evaluate(self, candidate: Any, context: Any) -> List[Dict]:
+        '''
+        Evaluate tier-1 section order on one module declaration.
+
+        :param candidate: The module declaration.
+        :type candidate: Any
+        :param context: The conformance visit context. Unused.
+        :type context: Any
+        :return: One finding per violating section.
+        :rtype: List[Dict]
+        '''
+
+        # The visit context is unused. Section order reads the module body.
+        del context
+
+        # Walk tier-1 headers once. Do not enter a group's body.
+        findings = []
+        highest = -1
+        prior_name = None
+        qualified = set()
+        for header in self._tier1_headers(candidate):
+            kind = getattr(header, 'name', None)
+            qualifier = getattr(header, 'artifact_qualifier', None)
+            rank = self.PREAMBLE_RANKS.get(kind, self.CONSTRUCT_RANK)
+            findings.extend(self._header_findings(
+                header, kind, qualifier, rank, highest, prior_name, qualified,
+            ))
+            if rank > highest:
+                highest = rank
+                prior_name = kind
+            if qualifier is not None:
+                qualified.add(kind)
+
+        # Return one finding per violating section, not a module summary.
+        return findings
+
+    # * method: _tier1_headers
+    def _tier1_headers(self, module_decl: Any) -> List[Declaration]:
+        '''
+        List tier-1 section headers in source order.
+
+        :param module_decl: The module declaration.
+        :type module_decl: Any
+        :return: Headers whose artifact type is ``***``.
+        :rtype: List[Declaration]
+        '''
+
+        # Skip comments and every statement that is not a tier-1 artifact.
+        headers = []
+        for stmt in getattr(module_decl, 'code', None) or []:
+            if not getattr(stmt, 'is_artifact', False):
+                continue
+            header = getattr(stmt, 'decl', None)
+            if header is None or getattr(header, 'artifact_type', None) != '***':
+                continue
+            headers.append(header)
+        return headers
+
+    # * method: _header_findings
+    def _header_findings(self, header: Declaration, kind: Optional[str],
+                         qualifier: Optional[str], rank: int, highest: int,
+                         prior_name: Optional[str], qualified: set) -> List[Dict]:
+        '''
+        Record rank and plain-before-subgroup findings for one header.
+
+        :param header: The later tier-1 header.
+        :type header: Declaration
+        :param kind: The section kind.
+        :type kind: Optional[str]
+        :param qualifier: The parenthetical qualifier, or None when plain.
+        :type qualifier: Optional[str]
+        :param rank: The section rank.
+        :type rank: int
+        :param highest: The highest rank already seen.
+        :type highest: int
+        :param prior_name: The section that established that rank.
+        :type prior_name: Optional[str]
+        :param qualified: Kinds that have already appeared as sub-groups.
+        :type qualified: set
+        :return: Findings for this header.
+        :rtype: List[Dict]
+        '''
+
+        # A plain section after a sub-group of the same kind is one finding.
+        findings = []
+        if qualifier is None and kind in qualified:
+            findings.append(self._finding(
+                header,
+                f"Section '{kind}': the plain section must precede its sub-group.",
+            ))
+
+        # A later section of strictly lower rank is one finding. Equal rank is not.
+        if highest >= 0 and rank < highest:
+            findings.append(self._finding(
+                header,
+                (
+                    f"Section '{kind}' follows '{prior_name}', "
+                    f"which is out of artifact order."
+                ),
+            ))
+        return findings
+
+    # * method: _finding
+    def _finding(self, header: Declaration, message: str) -> Dict:
+        '''
+        Build a section-order finding against the later header.
+
+        :param header: The violating header.
+        :type header: Declaration
+        :param message: The finding message.
+        :type message: str
+        :return: The finding dict.
+        :rtype: Dict
+        '''
+
+        # The node is the later header. The message names the sections.
+        return {
+            'error_code': 'ARTIFACT_SECTION_ORDER',
+            'message': message,
+            'node': header,
+            'section_name': getattr(header, 'name', None),
+        }
+
+# ** class: member_order_specification
+class MemberOrderSpecification(Specification):
+    '''
+    Refuse a class whose members are not in the style bands.
+
+    Attributes, init, and descriptive properties are read before other methods.
+    A class that mixes harness members with production members is not this rule.
+    '''
+
+    # * attribute: production_roles
+    PRODUCTION_ROLES: ClassVar[FrozenSet[str]] = frozenset({
+        'attribute',
+        'init',
+        'method',
+    })
+
+    # * attribute: tester_roles
+    TESTER_ROLES: ClassVar[FrozenSet[str]] = frozenset({
+        'fixture',
+        'test',
+    })
+
+    # * attribute: property_qualifier
+    PROPERTY_QUALIFIER: ClassVar[str] = 'property'
+
+    # * method: evaluate
+    def evaluate(self, candidate: Any, context: Any) -> List[Dict]:
+        '''
+        Evaluate member order on one class declaration.
+
+        :param candidate: The class declaration.
+        :type candidate: Any
+        :param context: The conformance visit context. Unused.
+        :type context: Any
+        :return: One finding per violating member.
+        :rtype: List[Dict]
+        '''
+
+        # The visit context is unused. Member order reads the class body.
+        del context
+
+        # Choose the table from the roles present before ranking any member.
+        members = self._members(candidate)
+        roles = [self._role(member) for member in members]
+        if self._is_mixed(roles):
+            return []
+        tester = any(role in self.TESTER_ROLES for role in roles)
+
+        # A later member of strictly lower rank is one finding.
+        findings = []
+        highest = -1
+        prior_label = None
+        for member in members:
+            role = self._role(member)
+            qualifier = getattr(member, 'artifact_qualifier', None)
+            rank = self._rank(role, qualifier, tester)
+            if rank is None:
+                continue
+            label = self._label(role, qualifier)
+            if highest >= 0 and rank < highest:
+                findings.append(self._finding(
+                    candidate, member, label, prior_label,
+                ))
+            if rank > highest:
+                highest = rank
+                prior_label = label
+        return findings
+
+    # * method: _members
+    def _members(self, class_decl: Any) -> List[Declaration]:
+        '''
+        List artifact-member declarations in source order.
+
+        :param class_decl: The class declaration.
+        :type class_decl: Any
+        :return: Members whose declaration is an artifact member.
+        :rtype: List[Declaration]
+        '''
+
+        # A member is a statement whose declaration is an artifact member.
+        found = []
+        for stmt in getattr(class_decl, 'code', None) or []:
+            decl = getattr(stmt, 'decl', None)
+            if decl is not None and getattr(decl, 'is_artifact_member', False):
+                found.append(decl)
+        return found
+
+    # * method: _is_mixed
+    def _is_mixed(self, roles: List[str]) -> bool:
+        '''
+        Report whether the class mixes harness roles with production roles.
+
+        :param roles: The member roles, in source order.
+        :type roles: List[str]
+        :return: True when both tables would apply.
+        :rtype: bool
+        '''
+
+        # The leftover harness is not this rule. Do not fire.
+        has_tester = any(role in self.TESTER_ROLES for role in roles)
+        has_production = any(role in self.PRODUCTION_ROLES for role in roles)
+        return has_tester and has_production
+
+    # * method: _role
+    def _role(self, member: Declaration) -> str:
+        '''
+        Read the member role, falling back to the declaration name.
+
+        :param member: The artifact member.
+        :type member: Declaration
+        :return: The role, or an empty string when both are unset.
+        :rtype: str
+        '''
+
+        # The qualifier is not part of the role. Property is ranked separately.
+        return getattr(member, 'artifact_role', None) or getattr(member, 'name', None) or ''
+
+    # * method: _rank
+    def _rank(self, role: str, qualifier: Optional[str],
+              tester: bool) -> Optional[int]:
+        '''
+        Rank one role on the active table.
+
+        :param role: The member role.
+        :type role: str
+        :param qualifier: The member qualifier, consulted only for property.
+        :type qualifier: Optional[str]
+        :param tester: Whether the tester table is active.
+        :type tester: bool
+        :return: The rank, or None when the role is outside the table.
+        :rtype: Optional[int]
+        '''
+
+        # A role outside the active table is skipped. It does not move the rank.
+        if tester:
+            if role == 'fixture':
+                return 0
+            if role == 'test':
+                return 1
+            return None
+        if role == 'attribute':
+            return 0
+        if role == 'init':
+            return 1
+        if role == 'method' and qualifier == self.PROPERTY_QUALIFIER:
+            return 2
+        if role == 'method':
+            return 3
+        return None
+
+    # * method: _label
+    def _label(self, role: str, qualifier: Optional[str]) -> str:
+        '''
+        Name a role, keeping a property method distinct from other methods.
+
+        :param role: The member role.
+        :type role: str
+        :param qualifier: The member qualifier.
+        :type qualifier: Optional[str]
+        :return: The role label cited in the finding.
+        :rtype: str
+        '''
+
+        # A static or validator qualifier stays an ordinary method.
+        if role == 'method' and qualifier == self.PROPERTY_QUALIFIER:
+            return 'method (property)'
+        return role or 'unknown'
+
+    # * method: _member_name
+    def _member_name(self, member: Declaration) -> str:
+        '''
+        Name the member for a finding.
+
+        :param member: The artifact member.
+        :type member: Declaration
+        :return: The inner declaration name, or the role when it is absent.
+        :rtype: str
+        '''
+
+        # Name capture from the header token is deferred, so use the inner name.
+        inner = getattr(member, 'inner_decl', None)
+        if inner is not None and getattr(inner, 'name', None):
+            return inner.name
+        return self._role(member)
+
+    # * method: _finding
+    def _finding(self, class_decl: Any, member: Declaration,
+                 label: str, prior_label: Optional[str]) -> Dict:
+        '''
+        Build a member-order finding against the later member.
+
+        :param class_decl: The class declaration.
+        :type class_decl: Any
+        :param member: The violating member.
+        :type member: Declaration
+        :param label: The later role label.
+        :type label: str
+        :param prior_label: The role that established the highest rank.
+        :type prior_label: Optional[str]
+        :return: The finding dict.
+        :rtype: Dict
+        '''
+
+        # The message names the class, the member, and both roles.
+        class_name = getattr(class_decl, 'name', None)
+        member_name = self._member_name(member)
+        return {
+            'error_code': 'ARTIFACT_MEMBER_ORDER',
+            'message': (
+                f"Class '{class_name}' member '{member_name}' role '{label}' "
+                f"follows '{prior_label}', which is out of member order."
+            ),
+            'node': member,
+            'class_name': class_name,
+            'member_name': member_name,
+            'role': label,
+            'prior_role': prior_label,
+        }
+
+# ** class: property_member_specification
+class PropertyMemberSpecification(Specification):
+    '''
+    Refuse a property that is not a descriptive getter on a model, mapper, or context.
+
+    A missing property is not a finding. A write is an ordinary method, not a setter.
+    '''
+
+    # * attribute: legal_groups
+    LEGAL_GROUPS: ClassVar[FrozenSet[str]] = frozenset({
+        'models',
+        'mappers',
+        'contexts',
+    })
+
+    # * attribute: legal_components
+    LEGAL_COMPONENTS: ClassVar[FrozenSet[str]] = frozenset({
+        'domain',
+        'mappers',
+        'contexts',
+    })
+
+    # * attribute: property_qualifier
+    PROPERTY_QUALIFIER: ClassVar[str] = 'property'
+
+    # * attribute: bare_property
+    BARE_PROPERTY: ClassVar[str] = 'property'
+
+    # * method: evaluate
+    def evaluate(self, candidate: Any, context: Any) -> List[Dict]:
+        '''
+        Evaluate the property form of one artifact member.
+
+        :param candidate: The member header declaration.
+        :type candidate: Any
+        :param context: The conformance visit context.
+        :type context: Any
+        :return: Property findings, or an empty list.
+        :rtype: List[Dict]
+        '''
+
+        # A member that is not a property candidate is not a finding.
+        decl = candidate
+        decorators = collect_member_decorators(decl)
+        if not self._is_candidate(decl, decorators):
+            return []
+
+        # Collect each miss. A legal descriptive getter contributes none.
+        findings = []
+        name = self._member_name(decl)
+        role = self._role(decl)
+        qualifier = getattr(decl, 'artifact_qualifier', None)
+        self._append_location_finding(findings, decl, name, context)
+        self._append_form_findings(findings, decl, name, role, qualifier, decorators)
+        self._append_descriptive_finding(findings, decl, name)
+        return findings
+
+    # * method: _is_candidate
+    def _is_candidate(self, decl: Declaration, decorators: List[str]) -> bool:
+        '''
+        Report whether the member is a property or a setter.
+
+        :param decl: The member header.
+        :type decl: Declaration
+        :param decorators: Encoded decorator strings.
+        :type decorators: List[str]
+        :return: True when a property qualifier, property decorator, or setter is present.
+        :rtype: bool
+        '''
+
+        # A missing property is not a candidate.
+        if getattr(decl, 'artifact_qualifier', None) == self.PROPERTY_QUALIFIER:
+            return True
+        if self._has_property_decorator(decorators):
+            return True
+        return any(self._is_setter(encoded) for encoded in decorators)
+
+    # * method: _location_legal
+    def _location_legal(self, context: Any) -> bool:
+        '''
+        Report whether a property is legal for the visit.
+
+        A present component uses the component name. A missing component uses
+        the enclosing tier-1 group. ``classes`` is not a substitute.
+
+        :param context: The conformance visit context.
+        :type context: Any
+        :return: True for domain, mappers, or contexts, or their group names.
+        :rtype: bool
+        '''
+
+        # Do not guess a component. The release path leaves it absent.
+        component = getattr(context, 'component', None)
+        if component is not None:
+            return component in self.LEGAL_COMPONENTS
+        return getattr(context, 'group_name', None) in self.LEGAL_GROUPS
+
+    # * method: _append_location_finding
+    def _append_location_finding(self, findings: List[Dict], decl: Declaration,
+                                 name: str, context: Any) -> None:
+        '''
+        Record a property that is not on a model, mapper, or context.
+
+        :param findings: The finding list to extend.
+        :type findings: List[Dict]
+        :param decl: The member header.
+        :type decl: Declaration
+        :param name: The member name.
+        :type name: str
+        :param context: The conformance visit context.
+        :type context: Any
+        :return: None
+        :rtype: None
+        '''
+
+        # A legal group or component is satisfactory.
+        if self._location_legal(context):
+            return
+
+        # Name the group or component that does not permit a property.
+        place = getattr(context, 'component', None) or getattr(context, 'group_name', None)
+        findings.append(self._invalid(
+            decl,
+            f"Property member '{name}' is not legal on '{place}'.",
+        ))
+
+    # * method: _append_form_findings
+    def _append_form_findings(self, findings: List[Dict], decl: Declaration,
+                              name: str, role: str, qualifier: Optional[str],
+                              decorators: List[str]) -> None:
+        '''
+        Record label, decorator, and caller-parameter misses.
+
+        :param findings: The finding list to extend.
+        :type findings: List[Dict]
+        :param decl: The member header.
+        :type decl: Declaration
+        :param name: The member name.
+        :type name: str
+        :param role: The member role.
+        :type role: str
+        :param qualifier: The member qualifier.
+        :type qualifier: Optional[str]
+        :param decorators: Encoded decorator strings.
+        :type decorators: List[str]
+        :return: None
+        :rtype: None
+        '''
+
+        # An attribute labelled property is the wrong label, not a hidden band.
+        if role == 'attribute' and self._has_property_decorator(decorators):
+            findings.append(self._invalid(
+                decl,
+                f"Property member '{name}' has @property on an attribute member.",
+            ))
+        elif self._has_property_decorator(decorators) and qualifier != self.PROPERTY_QUALIFIER:
+            findings.append(self._invalid(
+                decl,
+                (
+                    f"Property member '{name}' has @property without "
+                    f"the (property) qualifier."
+                ),
+            ))
+
+        # A setter is a write. There is no setter qualifier.
+        if any(self._is_setter(encoded) for encoded in decorators):
+            findings.append(self._invalid(
+                decl,
+                (
+                    f"Property member '{name}' uses a setter decorator; "
+                    f"a write is an ordinary method."
+                ),
+            ))
+
+        # The legal decorator is a bare @property and nothing else.
+        if qualifier == self.PROPERTY_QUALIFIER and decorators != [self.BARE_PROPERTY]:
+            findings.append(self._invalid(
+                decl,
+                (
+                    f"Property member '{name}' has (property) without "
+                    f"a bare @property."
+                ),
+            ))
+
+        # A property takes no caller parameter beyond self.
+        if qualifier == self.PROPERTY_QUALIFIER or self._has_property_decorator(decorators):
+            for param in self._extra_params(decl):
+                findings.append(self._invalid(
+                    decl,
+                    (
+                        f"Property member '{name}' has a caller parameter "
+                        f"'{param}' other than self."
+                    ),
+                ))
+
+    # * method: _append_descriptive_finding
+    def _append_descriptive_finding(self, findings: List[Dict],
+                                    decl: Declaration, name: str) -> None:
+        '''
+        Record a property body that assigns through self.
+
+        :param findings: The finding list to extend.
+        :type findings: List[Dict]
+        :param decl: The member header.
+        :type decl: Declaration
+        :param name: The member name.
+        :type name: str
+        :return: None
+        :rtype: None
+        '''
+
+        # Do not prove that the body never calls a mutator. Assignment is enough.
+        inner = getattr(decl, 'inner_decl', None)
+        if inner is None or not self._assigns_through_self(inner):
+            return
+        findings.append({
+            'error_code': 'PROPERTY_NOT_DESCRIPTIVE',
+            'message': (
+                f"Property '{name}' assigns through self and is not descriptive."
+            ),
+            'node': decl,
+            'member_name': name,
+        })
+
+    # * method: _has_property_decorator
+    def _has_property_decorator(self, decorators: List[str]) -> bool:
+        '''
+        Report whether a decorator is ``@property``.
+
+        :param decorators: Encoded decorator strings.
+        :type decorators: List[str]
+        :return: True when a property decorator is present.
+        :rtype: bool
+        '''
+
+        # A bare name, a call, and a dotted property are all ``@property``.
+        for encoded in decorators:
+            if encoded == self.BARE_PROPERTY or encoded.startswith('Call(property'):
+                return True
+            if encoded.endswith('.property') or encoded.endswith(', property)'):
+                return True
+        return False
+
+    # * method: _is_setter
+    def _is_setter(self, encoded: str) -> bool:
+        '''
+        Report whether an encoded decorator is a setter.
+
+        :param encoded: The encoded decorator.
+        :type encoded: str
+        :return: True for ``setter`` or a ``.setter`` attribute.
+        :rtype: bool
+        '''
+
+        # ``@name.setter`` encodes as a dotted name. There is no setter qualifier.
+        return (
+            encoded == 'setter'
+            or encoded.endswith('.setter')
+            or encoded.endswith(', setter)')
+        )
+
+    # * method: _extra_params
+    def _extra_params(self, decl: Declaration) -> List[str]:
+        '''
+        List caller parameters other than self.
+
+        :param decl: The member header.
+        :type decl: Declaration
+        :return: Parameter names that are not ``self``.
+        :rtype: List[str]
+        '''
+
+        # A missing function has no caller parameters to judge.
+        inner = getattr(decl, 'inner_decl', None)
+        if inner is None or not getattr(inner, 'is_func', False):
+            return []
+        params = inner.type.params if inner.type is not None else []
+        return [param.name for param in params if param.name != 'self']
+
+    # * method: _assigns_through_self
+    def _assigns_through_self(self, node: Any) -> bool:
+        '''
+        Report whether a body assigns through self.
+
+        :param node: A declaration, statement, or nested body node.
+        :type node: Any
+        :return: True when an assignment target is a self attribute.
+        :rtype: bool
+        '''
+
+        # An assignment through self is the target, not a later read.
+        expr = getattr(node, 'expr', None)
+        if self._expr_assigns_through_self(expr):
+            return True
+
+        # Descend snippet and control-flow bodies. Do not follow calls.
+        for name in ('code', 'body', 'else_body', 'finally_body'):
+            for child in getattr(node, name, None) or []:
+                if self._assigns_through_self(child):
+                    return True
+        return False
+
+    # * method: _expr_assigns_through_self
+    def _expr_assigns_through_self(self, expr: Any) -> bool:
+        '''
+        Report whether an expression assigns through self.
+
+        :param expr: The expression, or None.
+        :type expr: Any
+        :return: True when this expression or a child assigns through self.
+        :rtype: bool
+        '''
+
+        # A missing expression does not assign.
+        if expr is None:
+            return False
+        if getattr(expr, 'is_assignment', False) and self._is_self_target(getattr(expr, 'left', None)):
+            return True
+
+        # A nested assignment is still an assignment through self.
+        for child in (getattr(expr, 'left', None), getattr(expr, 'right', None)):
+            if self._expr_assigns_through_self(child):
+                return True
+        return False
+
+    # * method: _is_self_target
+    def _is_self_target(self, expr: Any) -> bool:
+        '''
+        Report whether an assignment target is a self attribute.
+
+        :param expr: The assignment target, or None.
+        :type expr: Any
+        :return: True for ``self.name`` and an attribute of self.
+        :rtype: bool
+        '''
+
+        # A bare self is not an assignment through self.
+        if expr is None:
+            return False
+        if getattr(expr, 'is_self_attribute', False):
+            return True
+        name = getattr(expr, 'name', None) or ''
+        if getattr(expr, 'is_name_ref', False) and str(name).startswith('self.'):
+            return True
+        if getattr(expr, 'kind', None) == ExprKind.ATTRIBUTE:
+            receiver = getattr(expr, 'left', None)
+            receiver_name = getattr(receiver, 'name', None)
+            return receiver_name == 'self' or getattr(receiver, 'is_self_attribute', False)
+        return False
+
+    # * method: _role
+    def _role(self, member: Declaration) -> str:
+        '''
+        Read the member role, falling back to the declaration name.
+
+        :param member: The artifact member.
+        :type member: Declaration
+        :return: The role, or an empty string when both are unset.
+        :rtype: str
+        '''
+
+        # The property band is the qualifier, not this role string.
+        return getattr(member, 'artifact_role', None) or getattr(member, 'name', None) or ''
+
+    # * method: _member_name
+    def _member_name(self, member: Declaration) -> str:
+        '''
+        Name the member for a finding.
+
+        :param member: The artifact member.
+        :type member: Declaration
+        :return: The inner declaration name, or the role when it is absent.
+        :rtype: str
+        '''
+
+        # Name capture from the header token is deferred, so use the inner name.
+        inner = getattr(member, 'inner_decl', None)
+        if inner is not None and getattr(inner, 'name', None):
+            return inner.name
+        return self._role(member)
+
+    # * method: _invalid
+    def _invalid(self, decl: Declaration, message: str) -> Dict:
+        '''
+        Build an invalid-property finding.
+
+        :param decl: The member header.
+        :type decl: Declaration
+        :param message: The finding message, naming the miss.
+        :type message: str
+        :return: The finding dict.
+        :rtype: Dict
+        '''
+
+        # The same code covers every form miss. The message names which one.
+        return {
+            'error_code': 'INVALID_PROPERTY_MEMBER',
+            'message': message,
+            'node': decl,
+            'member_name': self._member_name(decl),
+        }
+
 # ** class: import_group_specification
 class ImportGroupSpecification(Specification):
     '''

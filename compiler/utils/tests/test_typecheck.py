@@ -4,8 +4,11 @@
 
 # ** core
 import inspect
+from pathlib import Path
 
 # ** app
+from ...assets.error import COMPILER_DEFAULT_ERRORS
+from ...assets.provision import COMPILER_DEFAULT_PROVISIONS
 from ...domain.ast import ExprKind, TypeKind
 from ...mappers.artifact import (
     ArtifactDeclarationAggregate,
@@ -69,7 +72,8 @@ def _decl(decl) -> StatementAggregate:
     return StatementAggregate.new_decl_stmt(decl)
 
 # ** function: _group
-def _group(name: str, body: list) -> ArtifactStatementAggregate:
+def _group(name: str, body: list,
+           qualifier: str = None) -> ArtifactStatementAggregate:
     '''
     Create a tier-1 artifact group.
 
@@ -77,6 +81,8 @@ def _group(name: str, body: list) -> ArtifactStatementAggregate:
     :type name: str
     :param body: The group body.
     :type body: list
+    :param qualifier: The optional parenthetical qualifier.
+    :type qualifier: str
     :return: The artifact statement.
     :rtype: ArtifactStatementAggregate
     '''
@@ -85,6 +91,7 @@ def _group(name: str, body: list) -> ArtifactStatementAggregate:
     header = ArtifactDeclarationAggregate.new_artifact_decl(
         name=name,
         artifact_type='***',
+        qualifier=qualifier,
     )
     return ArtifactStatementAggregate.new_artifact_stmt(header, body)
 
@@ -149,7 +156,8 @@ def _import(name: str) -> StatementAggregate:
 
 # ** function: _func
 def _func(name: str, params: list = None,
-          return_kind: TypeKind = None) -> DeclarationAggregate:
+          return_kind: TypeKind = None,
+          body: list = None) -> DeclarationAggregate:
     '''
     Create a function declaration.
 
@@ -159,6 +167,8 @@ def _func(name: str, params: list = None,
     :type params: list
     :param return_kind: The optional return-type kind.
     :type return_kind: TypeKind
+    :param body: The optional function body.
+    :type body: list
     :return: The function declaration.
     :rtype: DeclarationAggregate
     '''
@@ -175,7 +185,7 @@ def _func(name: str, params: list = None,
             params=params or [],
             return_type=return_type,
         ),
-        body=[],
+        body=body or [],
     )
 
 # ** function: _attr
@@ -333,14 +343,90 @@ def _binop(operator: str, left: ExpressionAggregate,
         ),
     )
 
-# ** function: _codes
-def _codes(module: DeclarationAggregate) -> list:
+# ** function: _class
+def _class(name: str, members: list) -> DeclarationAggregate:
     '''
-    Build a symbol table, then check the module with the common rule set.
+    Create a class declaration.
+
+    :param name: The class name.
+    :type name: str
+    :param members: The class body statements.
+    :type members: list
+    :return: The class declaration.
+    :rtype: DeclarationAggregate
+    '''
+
+    # Members are the class body the order specification reads.
+    return DeclarationAggregate.new_class_decl(
+        name=name,
+        subclasses=None,
+        doc_string=None,
+        members=members,
+    )
+
+# ** function: _self
+def _self() -> ParamListAggregate:
+    '''
+    Create a self parameter.
+
+    :return: The self parameter.
+    :rtype: ParamListAggregate
+    '''
+
+    # A property and an ordinary method both take self.
+    return ParamListAggregate.new('self')
+
+# ** function: _property
+def _property(name: str = 'label',
+              body: list = None) -> StatementAggregate:
+    '''
+    Create a legal property method.
+
+    :param name: The property name.
+    :type name: str
+    :param body: The optional function body.
+    :type body: list
+    :return: The member statement.
+    :rtype: StatementAggregate
+    '''
+
+    # The legal form is a bare property decorator and the property qualifier.
+    return _member('method', [
+        _decorator('property'),
+        _decl(_func(name, params=[_self()], body=body)),
+    ], qualifier='property')
+
+# ** function: _hosted
+def _hosted(group: str, members: list,
+            class_name: str = 'Sample') -> DeclarationAggregate:
+    '''
+    Host a class in one tier-1 group.
+
+    :param group: The tier-1 group name.
+    :type group: str
+    :param members: The class body statements.
+    :type members: list
+    :param class_name: The class name.
+    :type class_name: str
+    :return: The module declaration.
+    :rtype: DeclarationAggregate
+    '''
+
+    # The group name is what a missing component uses for the property rule.
+    return _module([
+        _group(group, [
+            _decl(_class(class_name, members)),
+        ]),
+    ])
+
+# ** function: _findings
+def _findings(module: DeclarationAggregate) -> list:
+    '''
+    Build a symbol table, then check the module through the public entry.
 
     :param module: The module declaration.
     :type module: DeclarationAggregate
-    :return: Finding codes, in walk order.
+    :return: Finding dicts, in walk order.
     :rtype: list
     '''
 
@@ -348,13 +434,26 @@ def _codes(module: DeclarationAggregate) -> list:
     cache = _provision_cache()
     builder = SymbolTableBuilder(cache, COMPILER_PROVISION_CACHE_PREFIX)
     builder.build(module)
-    findings = ConformanceChecker(
+    return ConformanceChecker(
         builder.scopes,
         cache,
         'common.',
         COMPILER_PROVISION_CACHE_PREFIX,
     ).check(module)
-    return [item['error_code'] for item in findings]
+
+# ** function: _codes
+def _codes(module: DeclarationAggregate) -> list:
+    '''
+    Return finding codes for a module checked through the public entry.
+
+    :param module: The module declaration.
+    :type module: DeclarationAggregate
+    :return: Finding codes, in walk order.
+    :rtype: list
+    '''
+
+    # Codes are enough when the test does not cite a message.
+    return [item['error_code'] for item in _findings(module)]
 
 # *** tests
 
@@ -829,7 +928,7 @@ def test_no_type_checker_class() -> None:
     assert not hasattr(typecheck, 'TypeChecker')
     assert not hasattr(typecheck, 'COMMON_RULE_SET')
 
-    # The common selector attaches exactly the eight rows, in cache order.
+    # The common selector attaches the three order rows, then the published eight.
     checker = ConformanceChecker(
         {},
         _provision_cache(),
@@ -840,6 +939,9 @@ def test_no_type_checker_class() -> None:
         (spec.id, spec.applies_to, type(spec).__name__)
         for spec in checker.provisions
     ] == [
+        ('common.section_order', 'module', 'SectionOrderSpecification'),
+        ('common.member_order', 'class', 'MemberOrderSpecification'),
+        ('common.property_member', 'member', 'PropertyMemberSpecification'),
         ('common.import_group', 'artifact_header', 'ImportGroupSpecification'),
         ('common.section_class_name', 'artifact_header', 'SectionClassNameSpecification'),
         ('common.function_section_name', 'artifact_header', 'FunctionSectionNameSpecification'),
@@ -849,3 +951,401 @@ def test_no_type_checker_class() -> None:
         ('common.binary_op_expression', 'expression', 'BinaryOpTypeSpecification'),
         ('common.binary_op_return', 'return', 'ReturnBinaryOpTypeSpecification'),
     ]
+
+# ** test: provisions_prepend_artifact_order_rows
+def test_provisions_prepend_artifact_order_rows() -> None:
+    '''
+    Test that the catalog begins with the three order rows and empty parameters.
+    '''
+
+    # The published 49 keys stay after the three new rows.
+    keys = list(COMPILER_DEFAULT_PROVISIONS)
+    assert keys[:4] == [
+        'common.section_order',
+        'common.member_order',
+        'common.property_member',
+        'common.import_group',
+    ]
+    assert len(keys) == 52
+    for key in keys[:3]:
+        value = COMPILER_DEFAULT_PROVISIONS[key]
+        assert value['parameters'] == {}
+        assert value['kind'] == 'specification'
+        assert value['module_path'] == 'compiler.utils.core'
+
+# ** test: artifact_order_errors_join_the_catalog
+def test_artifact_order_errors_join_the_catalog() -> None:
+    '''
+    Test that the four order codes are catalog keys and errors.yml stays absent.
+    '''
+
+    # The codes join the default error dict. They do not restore the YAML file.
+    for key in (
+        'ARTIFACT_SECTION_ORDER',
+        'ARTIFACT_MEMBER_ORDER',
+        'INVALID_PROPERTY_MEMBER',
+        'PROPERTY_NOT_DESCRIPTIVE',
+    ):
+        assert key in COMPILER_DEFAULT_ERRORS
+    assets = Path(__file__).resolve().parents[2] / 'assets'
+    assert not (assets / 'errors.yml').exists()
+
+# ** test: in_order_module_has_no_artifact_order_finding
+def test_in_order_module_has_no_artifact_order_finding() -> None:
+    '''
+    Test that an in-order module yields no finding from these specifications.
+    '''
+
+    # Preamble, then construct groups, with members in band order.
+    module = _module([
+        _group('imports', [
+            _import_section('core', [_import('typing')]),
+        ]),
+        _group('constants', []),
+        _group('functions', []),
+        _group('classes', []),
+        _group('models', [
+            _decl(_class('Sample', [
+                _member('attribute', [_decl(_attr('count', kind=TypeKind.INT))]),
+                _member('init', [_decl(_func('__init__', params=[_self()]))]),
+                _property(),
+                _member('method', [_decl(_func('run', params=[_self()]))]),
+            ])),
+        ]),
+        _group('events', []),
+    ])
+
+    # Section order, member order, and the property form are satisfactory.
+    assert _codes(module) == []
+
+# ** test: construct_group_before_constants_is_out_of_order
+def test_construct_group_before_constants_is_out_of_order() -> None:
+    '''
+    Test that a construct group before constants yields ARTIFACT_SECTION_ORDER.
+    '''
+
+    # models is a construct group. constants is a preamble section.
+    module = _module([
+        _group('models', []),
+        _group('constants', []),
+    ])
+
+    # The later preamble section is the finding.
+    assert _codes(module) == ['ARTIFACT_SECTION_ORDER']
+
+# ** test: qualified_section_before_plain_section_is_out_of_order
+def test_qualified_section_before_plain_section_is_out_of_order() -> None:
+    '''
+    Test that a sub-group before its plain section yields ARTIFACT_SECTION_ORDER.
+    '''
+
+    # The qualified constants section appears before the plain constants section.
+    module = _module([
+        _group('constants', [], qualifier='error'),
+        _group('constants', []),
+    ])
+    findings = _findings(module)
+
+    # The message says the plain section must precede its sub-group.
+    assert [item['error_code'] for item in findings] == ['ARTIFACT_SECTION_ORDER']
+    assert 'the plain section must precede its sub-group' in findings[0]['message']
+
+# ** test: missing_functions_section_is_not_a_finding
+def test_missing_functions_section_is_not_a_finding() -> None:
+    '''
+    Test that a missing functions section yields no section-order finding.
+    '''
+
+    # functions is absent. The sections that are present stay in order.
+    module = _module([
+        _group('imports', [
+            _import_section('core', [_import('typing')]),
+        ]),
+        _group('constants', []),
+        _group('classes', []),
+    ])
+
+    # A missing band is not a finding.
+    assert 'ARTIFACT_SECTION_ORDER' not in _codes(module)
+    assert _codes(module) == []
+
+# ** test: construct_groups_have_no_relative_order
+def test_construct_groups_have_no_relative_order() -> None:
+    '''
+    Test that models and events may appear in either order.
+    '''
+
+    # Both names are construct groups, so neither rank is lower.
+    forward = _module([
+        _group('models', []),
+        _group('events', []),
+    ])
+    reverse = _module([
+        _group('events', []),
+        _group('models', []),
+    ])
+
+    # Equal rank is not a finding.
+    assert _codes(forward) == []
+    assert _codes(reverse) == []
+
+# ** test: tests_before_fixtures_is_out_of_order
+def test_tests_before_fixtures_is_out_of_order() -> None:
+    '''
+    Test that tests before fixtures yields ARTIFACT_SECTION_ORDER.
+    '''
+
+    # fixtures ranks before tests.
+    module = _module([
+        _group('tests', []),
+        _group('fixtures', []),
+    ])
+
+    # The later fixtures section is the finding.
+    assert _codes(module) == ['ARTIFACT_SECTION_ORDER']
+
+# ** test: production_member_bands_in_order_have_no_order_finding
+def test_production_member_bands_in_order_have_no_order_finding() -> None:
+    '''
+    Test that attribute, init, property, then method yields no order finding.
+    '''
+
+    # Each band is strictly higher than the one before it.
+    module = _hosted('models', [
+        _member('attribute', [_decl(_attr('count', kind=TypeKind.INT))]),
+        _member('init', [_decl(_func('__init__', params=[_self()]))]),
+        _property(),
+        _member('method', [_decl(_func('run', params=[_self()]))]),
+    ])
+
+    # The property form is legal, so the module has no findings.
+    assert 'ARTIFACT_MEMBER_ORDER' not in _codes(module)
+    assert _codes(module) == []
+
+# ** test: method_before_property_is_out_of_order
+def test_method_before_property_is_out_of_order() -> None:
+    '''
+    Test that a standard method before a property yields ARTIFACT_MEMBER_ORDER.
+    '''
+
+    # A property is read before every other method.
+    module = _hosted('models', [
+        _member('method', [_decl(_func('run', params=[_self()]))]),
+        _property(),
+    ])
+
+    # The later property is the finding.
+    assert _codes(module) == ['ARTIFACT_MEMBER_ORDER']
+
+# ** test: property_before_init_is_out_of_order
+def test_property_before_init_is_out_of_order() -> None:
+    '''
+    Test that a property before init yields ARTIFACT_MEMBER_ORDER.
+    '''
+
+    # init ranks before the property band.
+    module = _hosted('models', [
+        _property(),
+        _member('init', [_decl(_func('__init__', params=[_self()]))]),
+    ])
+
+    # The later init is the finding.
+    assert _codes(module) == ['ARTIFACT_MEMBER_ORDER']
+
+# ** test: method_before_attribute_is_out_of_order
+def test_method_before_attribute_is_out_of_order() -> None:
+    '''
+    Test that a method before an attribute yields ARTIFACT_MEMBER_ORDER.
+    '''
+
+    # An attribute ranks before every method.
+    module = _hosted('models', [
+        _member('method', [_decl(_func('run', params=[_self()]))]),
+        _member('attribute', [_decl(_attr('count', kind=TypeKind.INT))]),
+    ])
+
+    # The later attribute is the finding.
+    assert _codes(module) == ['ARTIFACT_MEMBER_ORDER']
+
+# ** test: static_method_after_property_has_no_order_finding
+def test_static_method_after_property_has_no_order_finding() -> None:
+    '''
+    Test that a static method after a property yields no order finding.
+    '''
+
+    # A static qualifier does not leave the ordinary method band.
+    module = _hosted('models', [
+        _property(),
+        _member('method', [
+            _decorator('staticmethod'),
+            _decl(_func('build')),
+        ], qualifier='static'),
+    ])
+
+    # The static method ranks after the property.
+    assert 'ARTIFACT_MEMBER_ORDER' not in _codes(module)
+    assert _codes(module) == []
+
+# ** test: attribute_after_init_is_out_of_order
+def test_attribute_after_init_is_out_of_order() -> None:
+    '''
+    Test that an attribute after init yields ARTIFACT_MEMBER_ORDER.
+    '''
+
+    # An attribute ranks before init.
+    module = _hosted('models', [
+        _member('init', [_decl(_func('__init__', params=[_self()]))]),
+        _member('attribute', [_decl(_attr('count', kind=TypeKind.INT))]),
+    ])
+
+    # The later attribute is the finding.
+    assert _codes(module) == ['ARTIFACT_MEMBER_ORDER']
+
+# ** test: property_decorator_on_attribute_is_invalid
+def test_property_decorator_on_attribute_is_invalid() -> None:
+    '''
+    Test that @property on an attribute member yields INVALID_PROPERTY_MEMBER.
+    '''
+
+    # The property band is the qualifier, not a decorator on an attribute.
+    module = _hosted('models', [
+        _member('attribute', [
+            _decorator('property'),
+            _decl(_func('count', params=[_self()])),
+        ]),
+    ])
+
+    # The wrong label is the finding.
+    assert _codes(module) == ['INVALID_PROPERTY_MEMBER']
+
+# ** test: setter_decorator_is_an_ordinary_method
+def test_setter_decorator_is_an_ordinary_method() -> None:
+    '''
+    Test that a setter decorator yields INVALID_PROPERTY_MEMBER.
+    '''
+
+    # There is no setter qualifier. The decorator is the miss.
+    module = _hosted('models', [
+        _member('method', [
+            _decorator('count.setter'),
+            _decl(_func('count', params=[_self()])),
+        ]),
+    ])
+    findings = _findings(module)
+
+    # The message says a write is an ordinary method.
+    assert [item['error_code'] for item in findings] == ['INVALID_PROPERTY_MEMBER']
+    assert 'a write is an ordinary method' in findings[0]['message']
+
+# ** test: property_on_events_class_is_invalid
+def test_property_on_events_class_is_invalid() -> None:
+    '''
+    Test that a property on an events class yields INVALID_PROPERTY_MEMBER.
+    '''
+
+    # events is not models, mappers, or contexts.
+    module = _hosted('events', [
+        _property('name'),
+    ], class_name='Ping')
+
+    # The illegal group is the finding. The form itself is legal.
+    assert _codes(module) == ['INVALID_PROPERTY_MEMBER']
+
+# ** test: property_on_domain_mapper_or_context_is_not_a_finding
+def test_property_on_domain_mapper_or_context_is_not_a_finding() -> None:
+    '''
+    Test that a bare property on a domain, mapper, or context class yields no property finding.
+    '''
+
+    # Those components are the groups models, mappers, and contexts when component is absent.
+    for group in ('models', 'mappers', 'contexts'):
+        module = _hosted(group, [
+            _property(),
+        ])
+        assert _codes(module) == [], group
+
+# ** test: property_that_assigns_through_self_is_not_descriptive
+def test_property_that_assigns_through_self_is_not_descriptive() -> None:
+    '''
+    Test that a property body assigning through self yields PROPERTY_NOT_DESCRIPTIVE.
+    '''
+
+    # The assignment target is a self attribute. The form is otherwise legal.
+    module = _hosted('models', [
+        _member('attribute', [_decl(_attr('count', kind=TypeKind.INT))]),
+        _property('count', body=[
+            _assign('self.count', _int('1')),
+        ]),
+    ])
+
+    # The mutating body is the finding.
+    assert _codes(module) == ['PROPERTY_NOT_DESCRIPTIVE']
+
+# ** test: tester_fixture_then_test_has_no_finding
+def test_tester_fixture_then_test_has_no_finding() -> None:
+    '''
+    Test that fixture then test yields no finding.
+    '''
+
+    # The tester table ranks fixture before test.
+    module = _module([
+        _decl(_class('Sample', [
+            _member('fixture', []),
+            _member('test', []),
+        ])),
+    ])
+
+    # That order is satisfactory.
+    assert _codes(module) == []
+
+# ** test: tester_test_before_fixture_is_out_of_order
+def test_tester_test_before_fixture_is_out_of_order() -> None:
+    '''
+    Test that test before fixture yields ARTIFACT_MEMBER_ORDER.
+    '''
+
+    # fixture ranks before test.
+    module = _module([
+        _decl(_class('Sample', [
+            _member('test', []),
+            _member('fixture', []),
+        ])),
+    ])
+
+    # The later fixture is the finding.
+    assert _codes(module) == ['ARTIFACT_MEMBER_ORDER']
+
+# ** test: mixed_attribute_and_fixture_does_not_order
+def test_mixed_attribute_and_fixture_does_not_order() -> None:
+    '''
+    Test that a class mixing attribute and fixture yields no order finding.
+    '''
+
+    # The leftover harness is not this rule.
+    module = _module([
+        _decl(_class('Sample', [
+            _member('attribute', [_decl(_attr('count', kind=TypeKind.INT))]),
+            _member('fixture', []),
+        ])),
+    ])
+
+    # The order specification does not fire.
+    assert 'ARTIFACT_MEMBER_ORDER' not in _codes(module)
+    assert _codes(module) == []
+
+# ** test: import_group_order_is_not_these_specifications
+def test_import_group_order_is_not_these_specifications() -> None:
+    '''
+    Test that core after app inside imports yields no finding from these specifications.
+    '''
+
+    # Import-group order is listed in the style and is not a section rank.
+    module = _module([
+        _group('imports', [
+            _import_section('app', [_import('compiler')]),
+            _import_section('core', [_import('typing')]),
+        ]),
+    ])
+
+    # Neither the section rule nor the member rules judge that order.
+    assert _codes(module) == []
