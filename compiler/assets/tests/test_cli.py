@@ -395,9 +395,9 @@ def test_command_arguments_are_not_shared() -> None:
 # ** test: console_entry_still_opens_config
 def test_console_entry_still_opens_config() -> None:
     '''
-    Test that the console entry still opens config.yml. That assertion is the gap, not a boot.
+    Test that the console entry does not open config.yml.
     '''
 
-    # This catalog does not repair compiler/cli.py.
+    # The packaged config open is absent from the console entry.
     source = Path(__file__).resolve().parents[2] / 'cli.py'
-    assert "asset_path('config.yml')" in source.read_text(encoding='utf-8')
+    assert "asset_path('config.yml')" not in source.read_text(encoding='utf-8')
