@@ -9,10 +9,10 @@ Orientation index for this repository. It is not a copy of the Tiferet framework
 - **Repository:** https://github.com/greatstrength/tiferet-elsl
 - **Trunk:** `main`
 - **Python:** >= 3.10
-- **Distribution:** `tiferet-elsl` `1.0.0` (`Private :: Do Not Upload`; not on PyPI)
-- **Import package:** `compiler` (`compiler.__version__` is `1.0.0`)
+- **Distribution:** `tiferet-elsl` `1.0.1` (BSD-3-Clause; on PyPI)
+- **Import package:** `compiler` (`compiler.__version__` is `1.0.1`)
 - **Console script:** `tiferet-compiler` (`compiler.cli:main`)
-- **Release:** https://github.com/greatstrength/tiferet-elsl/releases/tag/v1.0.0
+- **Release:** https://github.com/greatstrength/tiferet-elsl/releases/tag/v1.0.1
 - **Sessions:** `compiler` and `compiler_cli`. The console script boots `compiler_cli`.
 - **Phone book:** [docs/collab/binding.md](docs/collab/binding.md)
 

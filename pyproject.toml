@@ -6,10 +6,14 @@ build-backend = "setuptools.build_meta"
 name = "tiferet-elsl"
 version = "1.0.0"
 description = "Domain-specific compiler for Tiferet component dialects"
-license = {text = "Proprietary — All Rights Reserved"}
+authors = [
+    { name = "Andrew Shatz, Great Strength Systems", email = "andrew@greatstrength.me" }
+]
+license = { text = "BSD-3-Clause" }
+readme = "README.md"
 classifiers = [
-    "License :: Other/Proprietary License",
-    "Private :: Do Not Upload",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python :: 3",
 ]
 requires-python = ">=3.10"
 dependencies = [
@@ -17,6 +21,11 @@ dependencies = [
     "tiferet-ly>=1.0.0b3,<1.0.0rc1",
     "pyyaml>=6.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/greatstrength/tiferet-elsl"
+Repository = "https://github.com/greatstrength/tiferet-elsl"
+Releases = "https://github.com/greatstrength/tiferet-elsl/releases"
 
 [project.optional-dependencies]
 dev = [

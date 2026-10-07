@@ -18,10 +18,10 @@
 
 ## Install and invoke
 
-The package is not on PyPI. Install the `1.0.0` wheel from the GitHub release, then call the script. The working directory does not matter. Asset paths are resolved from the installed package.
+The package is on PyPI. Run `pip install tiferet-elsl`, then call the script. The working directory does not matter. Asset paths are resolved from the installed package.
 
 ```bash
-pip install https://github.com/greatstrength/tiferet-elsl/releases/download/v1.0.0/tiferet_elsl-1.0.0-py3-none-any.whl
+pip install tiferet-elsl
 tiferet-compiler -h
 tiferet-compiler scan -h
 tiferet-compiler scan module -h
