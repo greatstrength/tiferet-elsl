@@ -36,14 +36,14 @@ from ..utils.semantic import SymbolTableBuilder
 
 # *** tests
 
-# ** test: version_is_1_0_0
-def test_version_is_1_0_0():
+# ** test: version_is_1_0_1
+def test_version_is_1_0_1():
     '''
     Test that the compiler package version is the frozen trunk release.
     '''
 
     # The version is the package attribute, not a second project file.
-    assert compiler.__version__ == '1.0.0'
+    assert compiler.__version__ == '1.0.1'
 
     # The distribution name is tiferet-elsl. Retired names stay off the surface.
     repo_root = Path(__file__).resolve().parents[2]

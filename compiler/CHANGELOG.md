@@ -1,5 +1,13 @@
 # tiferet-elsl
 
+## 1.0.1
+
+Metadata and release hotfix. The distribution is relicensed in metadata to `BSD-3-Clause`, matching the existing `LICENSE`.
+
+The `Private :: Do Not Upload` classifier and the proprietary license text are removed. The project gains `authors`, `readme`, and `project.urls` metadata. The release workflow publishes stable releases to PyPI through trusted publishing.
+
+No change to the public schemas frozen in `1.0.0`.
+
 ## 1.0.0
 
 First trunk release of `tiferet-elsl`.
