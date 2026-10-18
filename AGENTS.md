@@ -1,4 +1,4 @@
-# AGENTS.md — tiferet-elsl (v1.0.0)
+# AGENTS.md — tiferet-elsl (v1.0.1)
 
 Orientation index for this repository. It is not a copy of the Tiferet framework guide, and it does not restate the compiler. Where a document and the code disagree, the code wins.
 
