@@ -27,7 +27,7 @@ tiferet-compiler scan -h
 tiferet-compiler scan module -h
 ```
 
-`python -m compiler` is the same entry. `compiler.py` at the repository root only calls `compiler.cli.main`.
+`tiferet-compiler` is the supported entry. `python -m compiler` does not work: there is no `compiler/__main__.py`, so it exits `1` with "No module named compiler.__main__". From the repository root, `python compiler.py` calls the same `compiler.cli.main`.
 
 Argparse failures exit `2`. A structured API error exits `1`.
 
