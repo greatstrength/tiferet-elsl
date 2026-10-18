@@ -1,6 +1,6 @@
 # Core Domain Distillation — ElohaSL
 
-**Status:** Draft · **Domain:** `compiler` · **Code:** `tiferet_elsl/` (intended; not seeded) · **Branch:** `main`
+**Status:** Draft · **Domain:** `compiler` · **Code:** `compiler/` (trunk `v1.0.1`, `c0e9bc0`) · **Branch:** `main`
 **Companion:** `docs/domain-vision.md`
 
 ## 1. Purpose of this document
@@ -10,18 +10,21 @@ works: the vocabulary, the behaviors, the rules those behaviors enforce, and
 the way the pieces relate. Read it before changing the pipeline, and before
 judging whether a change belongs in this package or in a neighbor.
 
-`tiferet_elsl/` is the intended import package; the distribution name is
-`tiferet-elsl`. The trunk reconstruction lives under `compiler/`. A citation
-without a prefix is a file in this repository. `proto:` is the prototype of
-this pipeline at commit `cf07ed5`. `tiferet:` means `greatstrength/tiferet`
-`main` at `dc64214`, for the import law.
+The import package is `compiler`; the distribution name is `tiferet-elsl`.
+The trunk reconstruction through `v1.0.0` is closed, and `v1.0.1` is the
+current trunk release. A citation without a prefix is a file in this
+repository on `main` at `c0e9bc0` (`v1.0.1`). `tiferet:` means
+`greatstrength/tiferet` `main` at `dc64214`, for the import law.
 
-The actor dialects `events`, `domain`, and `di` now have rule lists here.
-The other seven dialects, the gated conformance events, and the declared
-pipelines are still prior art.
+Earlier drafts cited a pre-reconstruction prototype as `proto:` (commit
+`cf07ed5`, which is not in this repository). That prototype is not the
+`v1.x-proto` branch. Every behavior those citations described now ships on
+trunk, so this document cites trunk only.
 
-Where a description of that prototype and the code disagree, the code wins.
-Sections 7 and 8 record the disagreements.
+All ten dialects have rule lists on trunk, each run by its own gated
+conformance event, and the five pipelines are declared in
+`compiler/assets/feature.yml`. Where this document and the code disagree,
+the code wins. Sections 7 and 8 record the disagreements that remain.
 
 ## 2. The core domain, restated precisely
 
@@ -54,7 +57,7 @@ inventories that split.
 
 The vision names a further scale: the same declaration describes a module, a
 package, or an application. That is a property of the language, not a
-configured behavior. The prior-art pipelines operate on one module, or on a
+configured behavior. The trunk pipelines operate on one module, or on a
 stored model of one module. This document does not invent a package-scale or
 application-scale pass.
 
@@ -85,15 +88,15 @@ attribute, an initializer, or a method.
 **Snippet** — one logical step inside a method: a leading comment plus the
 statements it describes. The comment is kept separate from the code.
 
-**Annotation** — an inline structured note, such as an obsolete or todo
-marker, attached to an artifact rather than discarded as a comment.
+**Annotation** — an inline structured note — an obsolete (`# -- obsolete:`),
+todo (`# ++ todo:`), or see (`# >> see:`) marker — attached to an artifact rather than discarded as a comment.
 
 **Token** — the smallest recognized unit of source text, including the
 artifact markers and annotations.
 
 **Structural model (AST)** — the tree built from tokens. Its nodes are
 declarations, statements, expressions, and types. Artifact tiers are
-first-class node kinds. The prior-art code calls this tree the AST. This
+first-class node kinds. The code calls this tree the AST. This
 document uses that name only after this definition.
 
 **Symbol** — a named thing the file defines or imports: a class, a method, an
@@ -116,7 +119,7 @@ position when the model has one. Findings accumulate. The declared pipelines
 do not stop distillation because a finding exists.
 
 **Distillation** — turning the model into organized ElohaSL data. The
-prior-art code still calls this step code generation.
+code still calls this step code generation (`GenerateCode`).
 
 **Pipeline** — an ordered list of those behaviors, declared in configuration
 rather than hard-coded in a command name. Each pipeline here is a prefix of
@@ -124,53 +127,54 @@ the next, or the same tail started from a stored model.
 
 ## 4. What ElSL reads
 
-The dialect adds a small vocabulary on top of Python. The prior-art scanner
-recognizes it directly (`proto:compiler/assets/lexer.py (6-17)`):
+The dialect adds a small vocabulary on top of Python. The scanner
+recognizes it directly (`compiler/assets/lexer.py`, `compiler/assets/tokens.yml`):
 
 - Group, section, and member markers — the three artifact tiers.
-- Annotation markers — obsolete and todo.
+- Annotation markers — obsolete, todo, and see (`compiler/assets/tokens.yml`).
 - Docstrings, as the declared intent of a module, class, or method.
 - Ordinary line comments, which become snippet comments when they lead code.
 
 Two conventions are where the compiler gets its leverage.
 
 **Import grouping.** Imports are divided into `core` (standard library),
-`infra` (third-party), and `app` (other Tiferet components). The common rule
+`infra` (third-party, including the `tiferet` framework itself when the file
+is in a downstream repository), and `app` (this application's own component
+layers, imported relatively, such as `..domain`). The common rule
 rejects any other group name, and requires each of those groups to contain
-only import statements (`proto:compiler/utils/core.py (1134-1141)`). The
+only import statements (`compiler/utils/core.py (1347-1430)`,
+`INVALID_IMPORT_GROUP` and `INVALID_IMPORT_CONTENT`). The
 `app` group is the file's statement of what else in the system it depends
 on. Relationship checking reads that group. It does not guess.
 
 **Name concordance.** A section header names its unit in one style; the code
 inside must agree. A section expects a class whose PascalCase name matches
-the header's snake_case identifier (`proto:compiler/utils/core.py (1197-1223)`).
+the header's snake_case identifier (`compiler/utils/core.py:1432`).
 `# ** event: get_feature` requires a class `GetFeature`. A function section
-is checked the same way (`proto:compiler/utils/core.py:1243`).
+is checked the same way (`compiler/utils/core.py:1482`).
 
 **Named operations.** Computation is recorded as a name and its operands, not
 recovered later from syntax. An addition encodes as `Add(left, right)`
-(`proto:compiler/domain/ast.py:520`). A return encodes as `Return(inner)`
-(`proto:compiler/domain/ast.py:1065`). `Return(Add(a, b))` is that pairing.
+(`compiler/domain/ast.py:820`). A return encodes as `Return(inner)`
+(`compiler/domain/ast.py:1507`). `Return(Add(a, b))` is that pairing.
 The encoding lives on the structural model, so a later renderer can lower
 it without this package choosing a target language.
 
 ## 5. The six behaviors
 
-Each behavior is a bounded step. In the prior art each is a domain event,
-composed in `proto:compiler/assets/feature.yml`. Where a behavior has been
-reconstructed, the section cites the file in this repository. The declared
-pipelines are still prior art.
+Each behavior is a bounded step. Each is a domain event, composed in
+`compiler/assets/feature.yml`. Every behavior below ships on trunk.
 
 ### 5.1 Lexical scanning
 
 *Turn source text into tokens.*
 
-`PerformLexicalAnalysis` (`proto:compiler/events/lexer.py:24`) reads the
+`PerformLexicalAnalysis` (`compiler/events/lexer.py:23`) reads the
 file. Beyond ordinary tokenizing, the dialect keeps artifact markers and
 annotations as real tokens, and injects explicit indent and dedent tokens so
 block structure — including artifact nesting — is unambiguous downstream
-(`proto:compiler/utils/lexer.py (104-120)`). `EmitScanResult`
-(`proto:compiler/events/lexer.py:88`) renders the token stream for
+(`compiler/utils/lexer.py:28`, `TiferetLexer`). `EmitScanResult`
+(`compiler/events/lexer.py:92`) renders the token stream for
 inspection.
 
 **Agnostic on both axes.** Markers look the same in every dialect. This step
@@ -180,20 +184,22 @@ does not take a component type.
 
 *Turn tokens into one structural model.*
 
-`PerformSyntacticAnalysis` (`proto:compiler/events/parser.py:25`) drives a
+`PerformSyntacticAnalysis` (`compiler/events/parser.py:25`) drives a
 thin adapter over `tiferet_ly.utils.parse.PlyParser`
-(`proto:compiler/utils/parser.py (10-13)`). The model is Tiferet-aware rather than a generic Python tree
-(`proto:compiler/domain/artifact.py (105-115)`): groups and sections are
+(`compiler/utils/parser.py:372`). The model is Tiferet-aware rather than a generic Python tree
+(`compiler/domain/artifact.py`, `ArtifactDeclaration`, `ArtifactStatement`,
+`SnippetStatement`): groups and sections are
 their own statement kind, members carry an explicit role, snippets keep
 leading comments separate from code, and annotations stay on the artifact.
 
-`EmitParseResult` (`proto:compiler/events/parser.py:119`) serializes the
-model. `LoadFromAST` (`proto:compiler/events/codegen.py:164`) reads a stored
+`EmitParseResult` (`compiler/events/parser.py:131`) serializes the
+model. `LoadFromAST` (`compiler/events/codegen.py:176`) reads a stored
 model back, so later stages can run without re-parsing source.
 
-A position helper in the adapter has no dialect coupling and is already
-flagged as a future move into tiferet-ly
-(`proto:compiler/utils/parser.py (311-316)`). It is not ElohaSL domain.
+A position helper in the adapter (`make_position_helpers`,
+`compiler/utils/parser.py:258`) has no dialect coupling. It is not ElohaSL
+domain, and is a candidate to move into tiferet-ly. The trunk code does not
+mark it for that move.
 
 **Agnostic on both axes.** Every dialect uses the same tiers, members, and
 snippets. The generic parse engine is tiferet-ly's. This domain owns the
@@ -203,17 +209,17 @@ dialect vocabulary the engine is asked to recognize.
 
 *Establish what the file defines and what its references mean.*
 
-`PerformSemanticAnalysis` (`proto:compiler/events/semantic.py:17`) runs two
-passes (`proto:compiler/utils/semantic.py`).
+`PerformSemanticAnalysis` (`compiler/events/semantic.py:17`) runs two
+passes (`compiler/utils/semantic.py`).
 
-The symbol-table builder (`proto:compiler/utils/semantic.py:342`) opens a
+The symbol-table builder (`SymbolTableBuilder`, `compiler/utils/semantic.py:417`) opens a
 scope for each module, class, and method, and registers the symbols it
 finds, including imports and attributes assigned through `self`. Artifact
 tiers are structural, not lexical, so the builder descends through them
 without creating scopes. Scopes are keyed by dotted path
-(`proto:compiler/domain/semantic.py (29-63)`).
+(`compiler/domain/semantic.py`, `Symbol` and `Scope`).
 
-The name resolver (`proto:compiler/utils/semantic.py:607`) walks the model
+The name resolver (`NameResolver`, `compiler/utils/semantic.py:702`) walks the model
 again. For every name used, it finds the nearest scope that defines it,
 walking outward from the current scope to the module, with `self.x` resolved
 against the enclosing class. Each lookup is recorded as resolved or
@@ -230,38 +236,50 @@ the next behavior, and it requires the component type.
 
 Component type is an input. On the semantic-bearing commands it arrives as
 `-c` / `--component`, required, with the ten names as the legal choices
-(`proto:compiler/assets/cli.yml (1-2)`, `(66-82)`). The walker is one
-`ConformanceChecker` (`compiler/utils/typecheck.py:162`), a
+(`compiler/assets/cli.yml`; locked by `compiler/tests/test_schema_freeze.py`). The walker is one
+`ConformanceChecker` (`compiler/utils/typecheck.py:431`), a
 `StatementWalker`. The checker file does not branch on component type. The
 rule list it is given does.
 
 Findings are collected rather than failing on the first one
-(`proto:compiler/domain/typecheck.py:14`).
+(`TypeCheckError`, `compiler/domain/typecheck.py:17`). The specifications on
+trunk can record 54 distinct finding codes; the `elsl-rule-sets` skill lists
+each code by specification.
 
 The common family runs for every component type
-(`compiler/utils/typecheck.py (35-68)`): import groups limited to
+(`COMMON_RULE_SET`, `compiler/utils/typecheck.py:41`): import groups limited to
 `core`, `infra`, and `app`; a named section must contain the unit it
 advertises; an attribute member must be a variable declaration; a method
 member must be a function. Assignments and arithmetic are checked shallowly
 against declared and inferred types. That shallow check serves conformance.
 It is not a general type system.
 
-The reconstructed checker does not branch on component type. Three actor
-rule lists are constants on that file: `EVENT_RULE_SET`
-(`compiler/utils/typecheck.py (71-76)`), `DOMAIN_RULE_SET`
-(`compiler/utils/typecheck.py (79-123)`), and `DI_RULE_SET`
-(`compiler/utils/typecheck.py (126-157)`). A caller passes one list.
+The checker does not branch on component type. All ten dialect rule lists
+are constants on `compiler/utils/typecheck.py`: `EVENT_RULE_SET` (`:77`),
+`DOMAIN_RULE_SET` (`:85`), `DI_RULE_SET` (`:132`), `INTERFACE_RULE_SET`
+(`:166`), `MAPPER_RULE_SET` (`:196`), `UTILS_RULE_SET` (`:233`),
+`REPOS_RULE_SET` (`:266`), `ASSET_RULE_SET` (`:309`), `CONTEXTS_RULE_SET`
+(`:346`), and `BLUEPRINTS_RULE_SET` (`:391`). A caller passes one list.
 `PermittedGroupSpecification`, `AppImportSpecification`, and
-`RequiredBaseSpecification` (`compiler/utils/core.py (1963-2358)`) supply
-constructor data. Unique classes already on the walker — event sections,
-domain attributes, group-section agreement, and abstract-method shape — are
-instantiated by those lists. `EVENT_RULE_SET` does not judge `app` imports.
+`RequiredBaseSpecification` (`compiler/utils/core.py (2000-2397)`) supply
+constructor data. Unique classes on the walker — event sections,
+domain attributes, group-section agreement, abstract-method shape, mapper
+roles, context-manager pairing, constant names, and repository CRUD methods —
+are instantiated by those lists. `EVENT_RULE_SET` does not judge `app` imports.
 
-Selecting a list by component type is not reconstructed. In the prior art
-that selection is one common event plus ten dialect events
-(`proto:compiler/events/typecheck.py (95-455)`), gated by
-`$r.component == '...'` (`proto:compiler/assets/feature.yml (44-93)`).
-The data there is also constructor arguments, not copied walker logic.
+Selecting a list by component type ships on trunk (#37, `v0.7.0`). It is one
+common event plus ten dialect events (`compiler/events/typecheck.py`,
+`CheckCommonConformance` at `:88` through `CheckReposConformance` at `:467`,
+on the shared `ConformanceEvent` base at `:31`), gated by
+`$r.component == '...'` (`compiler/assets/feature.yml (48-93)`). Each
+dialect event passes its rule-set constant; the data is constructor
+arguments, not copied walker logic.
+
+Findings reach the user only as printed lines. `semantic` prints each
+finding to standard output and exits `0`. The finding list is not written
+to the `-o` result, and `compile` runs the same gates but does not print or
+emit their findings (`compiler/events/semantic.py (113-136)`). How findings
+should be reported is open; see section 9.
 
 **Variable on both axes.** The walker is agnostic. Which rule list runs, and
 what data that list was constructed with, is the dialect. Section 7 records
@@ -272,8 +290,8 @@ has none.
 
 *Turn the model into organized ElohaSL data.*
 
-`GenerateCode` (`proto:compiler/events/codegen.py:21`) delegates to
-`TiferetGenerator.generate` (`proto:compiler/utils/codegen.py (666-751)`).
+`GenerateCode` (`compiler/events/codegen.py:21`) delegates to
+`TiferetGenerator.generate` (`compiler/utils/codegen.py:801`).
 The walk is generic: it dispatches on artifact group name and collects
 imports, functions, and ordered groups into a `cmpt` envelope keyed by the
 requested component type. That envelope — name, kind, description, imports,
@@ -282,7 +300,7 @@ groups — is the component-neutral shape.
 The same method still special-cases events. The default `kind` is
 `'events'`. When the kind is events, a legacy `evt_grp` shape is emitted
 beside `cmpt`, for an external reader of the older envelope
-(`EventGroupYamlObject.from_codegen_dict`).
+(`compiler/utils/codegen.py (877-886)`).
 
 **The walk is agnostic. The output vocabulary is variable.** `cmpt` is the
 ElohaSL shape. `evt_grp` is a legacy shim, not part of the language.
@@ -291,27 +309,31 @@ ElohaSL shape. `evt_grp` is a legacy shim, not part of the language.
 
 *Compact the output, then write it.*
 
-`OptimizeCode` (`proto:compiler/events/codegen.py:66`) runs an optimizer
-(`proto:compiler/utils/optimizer.py:180`) that finds repeated parameter and
+`OptimizeCode` (`compiler/events/codegen.py:70`) runs an optimizer
+(`YamlAnchorOptimizer`, `compiler/utils/optimizer.py:270`) that finds repeated parameter and
 return structures and replaces them with shared references, so the serialized
-form can use anchors instead of repeating itself. `EmitCodegenResult`
-(`proto:compiler/events/codegen.py:123`) writes the result. Format selection
+form can use anchors instead of repeating itself. The level is the `-O`
+option: `O0` (the default) skips the optimizer, and `O1` runs it. When it
+shares anything, the result gains a top-level `vars` list of the shared
+structures beside `cmpt`. `EmitCodegenResult`
+(`compiler/events/codegen.py:127`) writes the result as YAML or JSON
+(`--output-format yaml|json|auto`). Format selection
 and human-readable rendering live beside it
-(`proto:compiler/utils/output.py:16`, `proto:compiler/utils/printer.py:14`).
+(`compiler/utils/output.py:16`, `compiler/utils/printer.py:14`).
 
-The compacting mechanic is generic. The prior art still carries a rewrite
+The compacting mechanic is generic. Trunk still carries a rewrite
 that walks the legacy `evt_grp` envelope
-(`proto:compiler/utils/optimizer.py (52-78)`) next to one that walks `cmpt`
-(`proto:compiler/utils/optimizer.py:85`). When both envelopes are present,
+(`EvtGrpEnvelopeRewrite`, `compiler/utils/optimizer.py:137`) next to one that walks `cmpt`
+(`CmptEnvelopeRewrite`, `compiler/utils/optimizer.py:174`). When both envelopes are present,
 `collect_lists` applies the first matching rewrite and stops, and the events
-rewrite is first (`proto:compiler/utils/optimizer.py (233-250)`).
+rewrite is first (`compiler/utils/optimizer.py (321-349)`).
 
 **Agnostic in mechanic, variable in the envelope it knows how to walk.**
 
 ## 6. How the behaviors compose
 
 Pipelines are declared, not named per component type
-(`proto:compiler/assets/feature.yml (1-4)`). Five of them exist. Each of
+(`compiler/assets/feature.yml`, #33, `v0.6.0`). Five of them exist. Each of
 the first four is a prefix of the next. The fifth starts from a stored
 model. Steps hand results forward by named key (`tokens`, `ast`, `semantic`,
 `findings`, `codegen`).
@@ -322,13 +344,17 @@ model. Steps hand results forward by named key (`tokens`, `ast`, `semantic`,
   rules, the dialect rules gated on component type, and an analysis result
   (`(29-95)`).
 - **compile / module** — plus distillation, optimization, and emission
-  (`(96-130)`).
+  (`(97-129)`). It runs the semantic prefix but has no analysis-result step.
 - **compile / ast** — the same tail, starting from a stored model
   (`(130-151)`).
 
 The command surface uses the same split. The command name is `module` (or
 `ast`). The component type is an argument, not a command
-(`proto:compiler/assets/cli.yml (1-2)`).
+(`compiler/assets/cli.yml`). The console script is `tiferet-compiler`
+(`compiler.cli:main`), which boots the `compiler_cli` session. The command
+names, the ten `-c` choices, the session ids, the seven packaged YAML
+basenames, the envelope keys, and the findings contract are a frozen surface (`compiler/tests/test_schema_freeze.py`,
+#41, `v1.0.0`).
 
 ```mermaid
 flowchart LR
@@ -364,7 +390,7 @@ Three facts make that checkable here and not by a generic linter:
    in one dialect and a violation in another.
 
 The mechanism is `AppImportSpecification`
-(`compiler/utils/core.py:2052`). A dialect passes the component types it
+(`compiler/utils/core.py:2089`). A dialect passes the component types it
 allows, whether same-package siblings are allowed (the default is yes), and
 whether the framework-root `a` alias is allowed. The walker does not know
 the sets.
@@ -391,38 +417,34 @@ tiferet tree at `dc64214`. The skill is the law that is actually present.
 - `blueprints` may use `assets`, `contexts`, `di`, and `events` (bootstrap
   only). They reach domain types through contexts, not by importing them.
 
-**The sets reconstructed here** are the actor slice
-(`compiler/utils/typecheck.py (71-157)`):
+**The sets trunk enforces** are the `AppImportSpecification` arguments on
+the ten rule lists (`compiler/utils/typecheck.py (77-429)`). They match the
+prior-art constructor arguments that earlier drafts cited:
 
 - `events` — no relationship specification. `EVENT_RULE_SET` contains only
-  the event-section rule (`compiler/utils/typecheck.py (71-76)`).
-- `domain` — siblings, or `assets` (`compiler/utils/typecheck.py (94-103)`).
-- `di` — siblings, or `domain` and `interfaces`
-  (`compiler/utils/typecheck.py (140-152)`).
-
-**The sets the prior-art checker enforces** for the dialects not yet
-reconstructed remain `proto:compiler/utils/typecheck.py (66-277)`:
-
-- `assets` — siblings only (`(66-77)`).
-- `mappers` — siblings, or `domain` and `events` (`(122-131)`).
-- `interfaces` — siblings, or `mappers` (`(145-154)`).
-- `utils` — siblings, or `interfaces` and `mappers` (`(189-198)`).
+  the event-section rule (`compiler/utils/typecheck.py:77`).
+- `domain` — siblings, or `assets` (`:103`).
+- `di` — siblings, or `domain` and `interfaces` (`:149`).
+- `interfaces` — siblings, or `mappers` (`:182`).
+- `mappers` — siblings, or `domain` and `events` (`:212`).
+- `utils` — siblings, or `interfaces` and `mappers` (`:249`).
+- `repos` — siblings, or `interfaces`, `mappers`, and `utils` (`:281`).
+- `assets` — siblings only; no framework-root alias (`:326`).
 - `contexts` — siblings, or `assets`, `domain`, and `events`, and the
-  framework-root alias (`(211-222)`).
+  framework-root alias (`:364`).
 - `blueprints` — siblings, or `assets`, `contexts`, `di`, and `events`, and
-  the framework-root alias (`(243-254)`).
-- `repos` — siblings, or `interfaces`, `mappers`, and `utils` (`(267-277)`).
+  the framework-root alias (`:408`).
 
 The disagreements that matter:
 
-- **Events are unchecked.** The reconstructed list has no relationship rule.
+- **Events are unchecked.** The trunk list has no relationship rule.
   The skill's events row is not enforced.
-- **Domain.** The skill forbids every framework import. The reconstructed
+- **Domain.** The skill forbids every framework import. The trunk
   checker allows `assets`.
-- **Di.** The reconstructed list matches the skill: `domain` and
+- **Di.** The trunk list matches the skill: `domain` and
   `interfaces`, and no assets.
-- **Mappers.** The skill allows `domain` and forbids `events`. The prior-art
-  checker allows both. That dialect is not reconstructed here.
+- **Mappers.** The skill allows `domain` and forbids `events`. The trunk
+  checker allows both.
 - **Interfaces.** The skill's exception for importing `domain` is not a
   specification. The checker allows `mappers` and siblings, and does not
   state that exception.
@@ -437,8 +459,8 @@ names one declared source as a candidate. It does not perform that work.
 
 ## 8. The agnostic core and the variable edge
 
-`tiferet_elsl/` does not exist. The local inventory is the reconstructed
-actor slice. The remaining items are prior-art debts. Do not copy them as
+The implementation is the `compiler` package on trunk. `tiferet_elsl/` does
+not exist. The debts listed last ship on trunk today. Do not extend them as
 the design.
 
 **Agnostic — build once, not once per component type:**
@@ -464,25 +486,23 @@ the design.
   envelope does not name. The envelope itself (`cmpt`, with `kind`) is the
   agnostic contract. Dialect-specific keys inside it are the variable part.
 
-**Prototype debts — do not copy as the design:**
+**Trunk debts — do not extend as the design:**
 
 - `generate` defaults `kind` to `'events'`
-  (`proto:compiler/utils/codegen.py:666`). The neutral entry point still
-  assumes the first dialect.
+  (`compiler/utils/codegen.py:801`; `GenerateCode` too). The neutral entry
+  point still assumes the first dialect.
 - Events dual-emit `evt_grp` beside `cmpt`
-  (`proto:compiler/utils/codegen.py (736-751)`). That shim is a legacy
+  (`compiler/utils/codegen.py (877-886)`). That shim is a legacy
   envelope, not ElohaSL.
 - When both envelopes are present, `collect_lists` walks `evt_grp` and
-  stops (`proto:compiler/utils/optimizer.py (52-78)`, `(233-250)`).
-- Conformance selection is still eleven event classes and ten configuration
-  gates (`proto:compiler/events/typecheck.py (95-455)`,
-  `proto:compiler/assets/feature.yml (44-93)`). The walker and three actor
-  rule lists are reconstructed (`compiler/utils/typecheck.py (71-157)`).
-  The step that chooses a list by component type is not.
+  stops (`compiler/utils/optimizer.py:137`, `(321-349)`).
+- Conformance selection is eleven event classes and ten configuration
+  gates (`compiler/events/typecheck.py`, `compiler/assets/feature.yml (48-93)`).
+  It works, and the walker is shared, but each new dialect still costs one
+  event class and one gate.
 - The events dialect has no relationship specification
-  (`compiler/utils/typecheck.py (71-76)`). The reconstructed domain list
-  allows `assets`. The prior-art mapper list allows `events`. Section 7
-  has the lines.
+  (`compiler/utils/typecheck.py:77`). The domain list allows `assets`. The
+  mapper list allows `events`. Section 7 has the lines.
 
 ## 9. Boundaries
 
@@ -500,8 +520,8 @@ and reporting findings with a location.
 - Holding a whole system in view, and orchestrating it. That is outside
   this compiler.
 - The generic lex-and-parse engine — tiferet-ly. This domain supplies the
-  dialect vocabulary. The position helper already marked for an upstream move
-  stays there.
+  dialect vocabulary. The dialect-free position helper is a candidate for an
+  upstream move (section 10).
 - General-purpose static analysis, and full type inference. Type reasoning
   here exists only to serve conformance.
 
@@ -510,18 +530,22 @@ and reporting findings with a location.
 Each item is a candidate for its own later proposal. None is opened here.
 No identifier is minted.
 
-1. **Seed `tiferet_elsl` with the agnostic pipeline.** Read, model,
-   verify, distill, as one component-agnostic command surface. Do not copy
-   the events default on `generate`.
-2. **Finish the conformance step.** Three actor rule lists now exist.
-   The remaining seven lists, and one step that selects a list by component
-   type, are still candidates. Do not add a checker subclass per dialect.
+1. **Shipped: the agnostic pipeline.** Read, model, verify, distill ships
+   as one component-agnostic command surface in the `compiler` package
+   (#33, `v0.6.0`; packaged in `v1.0.0`). The events default on `generate`
+   remains a debt (section 8). Whether the package is ever renamed
+   `tiferet_elsl` is not decided here.
+2. **Shipped: the conformance step.** All ten rule lists exist, and the
+   gated dialect events select one by component type (#37, `v0.7.0`). No
+   checker subclass was added per dialect. Collapsing the eleven events and
+   ten gates into one selecting step is still a candidate.
 3. **One declared relationship rulebook.** Documentation and the checker
-   read the same sets. Reconcile the skill and the prior-art constructor
+   read the same sets. Reconcile the skill and the trunk constructor
    arguments, and add the missing events rule. Until that exists, do not
    enforce a set copied from either side alone.
 4. **`cmpt` as the ElohaSL contract.** Do not carry `evt_grp` dual-emit, or
    the optimizer's preference for it, into this package. An external reader
    may keep its own shim. This compiler does not.
-5. **Leave dialect-free parser helpers in tiferet-ly.** The position helper
-   already says so. Do not grow that utility while seeding this package.
+5. **Move dialect-free parser helpers to tiferet-ly.** The position helper
+   (`compiler/utils/parser.py:258`) has no dialect coupling. Do not grow it
+   here.

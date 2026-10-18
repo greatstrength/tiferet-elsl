@@ -1,6 +1,6 @@
 # Domain Vision Statement — ElohaSL
 
-**Status:** Draft · **Domain:** `compiler` · **Code:** `tiferet_elsl/` (intended; not seeded) · **Branch:** `main`
+**Status:** Draft · **Domain:** `compiler` · **Code:** `compiler/` (trunk `v1.0.1`) · **Branch:** `main`
 
 ## The bet
 
