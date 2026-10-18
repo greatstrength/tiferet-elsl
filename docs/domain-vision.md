@@ -1,6 +1,6 @@
 # Domain Vision Statement — ElohaSL
 
-**Status:** Draft · **Domain:** `compiler` · **Code:** `compiler/` (trunk `v1.0.1`) · **Branch:** `main`
+**Status:** Draft · **Domain:** `compiler` · **Code:** `compiler/` (distribution `tiferet-elsl` 1.0.1, BSD-3-Clause, on PyPI; console script `tiferet-compiler`) · **Branch:** `main`
 
 ## The bet
 
