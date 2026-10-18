@@ -150,7 +150,9 @@ rejects any other group name, and requires each of those groups to contain
 only import statements (`compiler/utils/core.py (1347-1430)`,
 `INVALID_IMPORT_GROUP` and `INVALID_IMPORT_CONTENT`). The
 `app` group is the file's statement of what else in the system it depends
-on. Relationship checking reads that group. It does not guess.
+on. Relationship checking reads that group. It does not guess. Trunk's own
+`compiler/cli.py` and five `compiler/domain/*.py` modules still file their
+`tiferet` imports under `app`. That is a trunk defect, not the rule.
 
 **Name concordance.** A section header names its unit in one style; the code
 inside must agree. A section expects a class whose PascalCase name matches
@@ -419,7 +421,9 @@ still resolve against the working directory, a known regression with a
 hotfix pending. The command
 names, the ten `-c` choices, the session ids, the seven packaged YAML
 basenames, the envelope keys, and the findings contract are a frozen surface (`compiler/tests/test_schema_freeze.py`,
-#41, `v1.0.0`).
+#41, `v1.0.0`). The entry point is to become `tiferet-elsl` (maintainer
+ruling, 2026-10-18). That rename is prototype work. Trunk 1.0.x ships only
+`tiferet-compiler` (`pyproject.toml:45`) until a freeze adopts it.
 
 ```mermaid
 flowchart LR
@@ -552,7 +556,7 @@ that trunk carries deliberately.
   envelope does not name. The envelope itself (`cmpt`, with `kind`) is the
   agnostic contract. Dialect-specific keys inside it are the variable part.
 
-**Carried into trunk (specified by TRDs, frozen in 1.0.0); removal is proposal work:**
+**Carried into trunk (specified by TRDs, frozen in 1.0.0); removal is RFP work:**
 
 - `generate` defaults `kind` to `'events'`
   (`compiler/utils/codegen.py:801`, TRD #29), and `GenerateCode` defaults
@@ -588,31 +592,43 @@ and reporting findings with a location.
   this compiler.
 - The generic lex-and-parse engine — tiferet-ly. This domain supplies the
   dialect vocabulary. The dialect-free position helper is a candidate for an
-  upstream move (section 10).
+  upstream move (section 10). The compiler pins `tiferet-ly>=1.0.0b3,<1.0.0rc1`
+  (`pyproject.toml:21`). Beta `1.0.0b3` is the reference. tiferet-ly trunk
+  `1.0.0` lacks the layout and synthetic-token APIs this compiler uses, and
+  its `1.0.2`-`1.0.4` releases are catching up to b3. Moving onto trunk ly is
+  prototype work, after those releases ship.
 - General-purpose static analysis, and full type inference. Type reasoning
   here exists only to serve conformance.
 
 ## 10. Where this leads
 
-Each item is a candidate for its own later proposal. None is opened here.
-No identifier is minted.
+Each open item is RFP work on the prototype strand: anything not yet on
+trunk, or listed here as future work, goes through an RFP first. None is
+opened here, and no identifier is minted.
 
 1. **Done (v0.6.0, #33): the agnostic pipeline.** Read, model, verify, distill ships
    as one component-agnostic command surface in the `compiler` package
    (packaged in `v1.0.0`). The `'events'` default on `generate` was kept by
-   TRD #29 (section 8). Whether the package is ever renamed
-   `tiferet_elsl` is not decided here.
+   TRD #29 (section 8). The entry point is to become `tiferet-elsl`
+   (maintainer ruling). That rename, and any rename of the import package,
+   is prototype work. Trunk keeps `tiferet-compiler` and `compiler` until a
+   freeze adopts it.
 2. **Done (v0.7.0, #34-#37): the conformance step.** All ten rule lists
    exist, and eleven gated events select one by component type. No
    checker subclass was added per dialect. Collapsing the eleven events and
    ten gates into one selecting step is still a candidate.
 3. **One declared relationship rulebook.** Documentation and the checker
    read the same sets. Reconcile the skill and the trunk constructor
-   arguments, and add the missing events rule. Until that exists, do not
-   enforce a set copied from either side alone.
-4. **`cmpt` as the ElohaSL contract.** Candidate: drop the `evt_grp`
-   dual-emit and the optimizer's preference for it. Trunk still emits it
-   under the 1.0.0 freeze, so this needs a freeze id. An external reader
+   arguments, and add the missing events rule. Ruled (2026-10-18): the
+   rulebook is a hard-coded asset catalog, seeded into the cache when the
+   cache is built. Checks read it from the cache, and user config does not
+   define it. Until that exists, do not enforce a set copied from either
+   side alone.
+4. **`cmpt` as the only output contract.** Ruled (2026-10-18): `cmpt` is
+   the only ElohaSL output contract. `evt_grp` is a legacy shim that this
+   compiler does not keep. Dropping the dual-emit and the optimizer's
+   preference for it is prototype work. Trunk still emits `evt_grp` under the
+   1.0.0 freeze, so removing it there needs a freeze id. An external reader
    may keep its own shim.
 5. **Dialect-free parser helpers in tiferet-ly.** Candidate: move the
    position helpers (`compiler/utils/parser.py:258`), which have no dialect
