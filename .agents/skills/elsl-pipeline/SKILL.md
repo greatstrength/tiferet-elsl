@@ -102,7 +102,7 @@ Only the compile commands emit the language. The component flag selects the kind
 tiferet-compiler compile module app/events/feature.py -c events
 ```
 
-reads a file whose markers are `# *** events` and `# ** event: get_feature`, then asks `GenerateCode` for the envelope. `cmpt.kind` is `events`. `evt_grp.evts.get_feature` is the event section. Scan and parse stop before that document exists.
+reads a file whose markers are `# *** events` and `# ** event: get_feature`, then asks `GenerateCode` for the envelope. `cmpt.kind` is `events`, and the event section is `evts.get_feature` in a `cmpt.grps` entry. On 1.0.x, `evt_grp.evts.get_feature` repeats it as a frozen legacy shim. Scan and parse stop before that document exists.
 
 `GenerateCode` is the step that asks `TiferetGenerator` for the envelope. `OptimizeCode` may share repeated structures at `O1`. It does not rename keys, but when it shares anything it prepends a top-level `vars` anchor list to the document. Read `elsl-language` before changing what those steps emit. This skill owns the wiring, not the document shape.
 

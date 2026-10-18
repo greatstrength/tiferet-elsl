@@ -31,7 +31,7 @@ description: >
 
 ElohaSL here is the compiled document, not the Python source. A construct is a source marker plus the keys it emits. A missing key means the construct was absent or empty. It does not mean an empty list.
 
-`compile` with `-c events` emits `cmpt` and `evt_grp`. Any other `-c` emits `cmpt` only. `cmpt` never contains `evt_grp`.
+`compile` with `-c events` emits `cmpt` and `evt_grp`. Any other `-c` emits `cmpt` only. `cmpt` never contains `evt_grp`. `cmpt` is the only output contract (maintainer ruling). `evt_grp` is a legacy shim, frozen in 1.0.0 output. Removing it is prototype work. Do not build new readers on `evt_grp`.
 
 ## Module
 
