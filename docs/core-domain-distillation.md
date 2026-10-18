@@ -32,6 +32,11 @@ the code wins. Sections 7 and 8 record the disagreements that remain.
 ElSL's core domain is **verifying and distilling declared structure in
 ElohaSL**.
 
+**First principle: the compiler checks one module at a time.** Every
+pipeline reads one module, or a stored model of one module, and every
+finding is about that module. Package and application levels are beyond
+its scope.
+
 A Tiferet source file is not just Python. It carries markers that declare what
 the file is composed of and what role each part plays. ElSL treats those
 markers as structure to be checked, not as commentary. From them it builds
@@ -55,12 +60,6 @@ The kind is an input. It selects both rulebooks. It is not inferred from
 the file. Recognizing markers, building the model, resolving names, and
 serializing the result are the same job for all ten kinds. Section 8
 inventories that split.
-
-The vision names a further scale: the same declaration describes a module, a
-package, or an application. That is a property of the language, not a
-configured behavior. The trunk pipelines operate on one module, or on a
-stored model of one module. This document does not invent a package-scale or
-application-scale pass.
 
 ## 3. Ubiquitous language
 

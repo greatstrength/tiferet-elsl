@@ -35,6 +35,9 @@ ElohaSL itself: the result another tool may store, compare, or render.
 That tool is not part of this compiler, and this compiler does not depend
 on it.
 
+ElSL's first principle is that it checks one module at a time. A package or
+an application as a whole is beyond its scope.
+
 ## What we get for it
 
 ### A domain that cannot be quietly compromised
