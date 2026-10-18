@@ -46,7 +46,7 @@ Five commands. Feature id is `group_key.key`.
 
 `compile.module` and `compile.ast` take `-O`. `O0` leaves codegen unchanged. `O1` shares repeated structures. A missing or empty `O` is `O0`.
 
-**Known issue (v1.0.1): `-O` accepts any value.** `cli.yml` gives `-O` no `choices`, and `GenerateCode` uppercases the value and compares it as a string (`level >= 'O1'`, `compiler/events/codegen.py`). Every value exits 0: `X`, `O2`, and `o1` optimize like `O1`, and `A` behaves like `O0`. Pass only `O0` or `O1`. A hotfix is pending.
+**Known issue (v1.0.1): `-O` accepts any value.** `cli.yml` gives `-O` no `choices`, and `OptimizeCode` uppercases the value and compares it as a string (`level >= 'O1'`, `compiler/events/codegen.py`). Every value exits 0: `X`, `O2`, and `o1` optimize like `O1`, and `A` behaves like `O0`. Pass only `O0` or `O1`. A hotfix is pending.
 
 **Known issue (v1.0.1): run the CLI from the repository root.** `resolve_boot_config` (`compiler/cli.py`) is meant to make the asset paths package-absolute, but the catalog paths under `const:` in `config.yml` (`token_config`, `grammar_config`, `production_config`, all `compiler/assets/...`) still reach the loader as working-directory-relative paths. From any other directory (including `compiler/`), every command exits 1 with `FILE_NOT_FOUND` for `compiler/assets/tokens.yml`. To compile files elsewhere, `cd` to the tiferet-elsl root and pass the source path. A hotfix is pending.
 
