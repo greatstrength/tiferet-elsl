@@ -337,9 +337,46 @@ needs a freeze decision (section 10, item 4).
 (`YamlAnchorOptimizer`, `compiler/utils/optimizer.py:270`) that finds repeated parameter and
 return structures and replaces them with shared references, so the serialized
 form can use anchors instead of repeating itself. The level is the `-O`
-option: `O0` (the default) skips the optimizer, and `O1` runs it. Shared lists
-are hoisted under a top-level `vars` key, present only when duplicates exist
-(TRD #30). `EmitCodegenResult`
+option: `O0` (the default) skips the optimizer, and `O1` runs it. `-O` is
+offered on both compile commands, with default `O0`
+(`compiler/assets/cli.yml (101-102)`); a missing or blank level is `O0`
+(`compiler/events/codegen.py:113`, `(116-117)`), and `O1` calls the optimizer
+(`(120-121)`).
+
+**The `vars` rule (TRD #30).** This is the intended rule, not an accident of
+the emitter:
+
+- *What is a candidate.* Each callable's `params` list and `returns` list:
+  `execute` and each method on a class-shaped entry, and each module-level
+  function. A list is fingerprinted by its kind and its exact items, so a
+  `params` list never merges with a `returns` list, and a missing key is not
+  an empty list (`compiler/utils/optimizer.py (107-111)`).
+- *When it triggers.* Only at `O1`, and only when at least two locations
+  carry the same fingerprint (`compiler/utils/optimizer.py (368-369)`).
+  Unique lists stay in place. When nothing repeats, the dict comes back
+  unchanged and there is no `vars` key at all
+  (`compiler/utils/optimizer.py (377-378)`).
+- *The key's shape.* `vars` is a top-level list. Each item is one shared
+  list (a `params` or `returns` list, as a list of strings), in fingerprint
+  first-seen order. `vars` is the first key, and the original top-level keys
+  follow in their order (`compiler/utils/optimizer.py (366-381)`;
+  `return {'vars': vars_list, **codegen}` at `:381`).
+- *How hoisted lists are referenced.* Every duplicate location is replaced by
+  the same Python list object as its `vars` item
+  (`compiler/utils/optimizer.py (371-374)`). The YAML emitter keeps key order
+  (`sort_keys=False`, `compiler/utils/output.py (75-80)`), so PyYAML anchors
+  each `vars` item (`&id001`) and every original location becomes an alias
+  (`params: *id001`). JSON has no aliases, so a JSON result carries `vars`
+  plus a full copy at each location.
+- *Which envelope is walked.* Only the first matching envelope, and `evt_grp`
+  comes before `cmpt` (`compiler/utils/optimizer.py:346`; see below). The
+  `evt_grp` walk covers event `execute` and methods only
+  (`compiler/utils/optimizer.py:163`). So on dual-emitted `-c events`
+  output, module-level function lists are not shared. On every other
+  component, the `cmpt` walk covers all class-shaped payloads and `fncs`
+  (`compiler/utils/optimizer.py:227`, `:236`).
+
+`EmitCodegenResult`
 (`compiler/events/codegen.py:127`) writes the result as YAML or JSON
 (`--output-format yaml|json|auto`). Format selection
 and human-readable rendering live beside it
