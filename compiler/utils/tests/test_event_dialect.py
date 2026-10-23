@@ -204,6 +204,51 @@ def test_event_section_ignored_for_non_event_keyword() -> None:
     # The event rule does not judge other keywords.
     assert check_event(module) == []
 
+# ** test: event_section_exempts_subclassed_base_event
+def test_event_section_exempts_subclassed_base_event() -> None:
+    '''
+    Test that a base event extended by another class in the module yields no findings.
+    '''
+
+    # FeatureEvent has no execute, and AddFeature extends it and declares execute.
+    module = _module([
+        _section('** event', 'feature_event', [
+            _decl(_class('FeatureEvent', [], base='DomainEvent')),
+        ]),
+        _section('** event', 'add_feature', [
+            _decl(_class('AddFeature', [
+                _member('method', [_decl(_func('execute'))]),
+            ], base='FeatureEvent')),
+        ]),
+    ])
+
+    # The subclassed base is exempt, and the subclass is satisfied.
+    assert check_event(module) == []
+
+# ** test: event_section_still_judges_subclass_without_execute
+def test_event_section_still_judges_subclass_without_execute() -> None:
+    '''
+    Test that a subclass of a base event still needs its own execute method.
+    '''
+
+    # AddFeature extends FeatureEvent but declares only a helper method.
+    module = _module([
+        _section('** event', 'feature_event', [
+            _decl(_class('FeatureEvent', [], base='DomainEvent')),
+        ]),
+        _section('** event', 'add_feature', [
+            _decl(_class('AddFeature', [
+                _member('method', [_decl(_func('helper'))]),
+            ], base='FeatureEvent')),
+        ]),
+    ])
+    findings = check_event(module)
+
+    # Only the subclass is reported.
+    assert len(findings) == 1
+    assert findings[0]['error_code'] == 'EVENT_MISSING_EXECUTE'
+    assert findings[0]['class_name'] == 'AddFeature'
+
 # ** test: event_rule_set_is_exactly_event_section
 def test_event_rule_set_is_exactly_event_section() -> None:
     '''
