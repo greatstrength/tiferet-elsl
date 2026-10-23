@@ -17,12 +17,7 @@ from tiferet.contexts.feature import FeatureContext
 from tiferet.domain.feature import Feature
 
 # ** app
-from ..feature import (
-    ASKED_STEPS,
-    DIALECT_SERVICE_ID,
-    CompilerFeatureContext,
-)
-from ..provision import COMPILER_PROVISION_CACHE_PREFIX
+from ..feature import CompilerFeatureContext
 
 # *** constants
 
@@ -31,6 +26,27 @@ _CONTEXTS_DIR = Path(__file__).resolve().parent.parent
 
 # ** constant: forbidden_source
 _FORBIDDEN_SOURCE = (
+    'run_step',
+    '_run_conformance',
+    '_run_codegen',
+    'ASKED_STEPS',
+    'ASKED_STEP_UNKNOWN',
+    'COMPONENT_REQUIRED',
+    'DIALECT_SERVICE_ID',
+    'COMPILER_PROVISION_CACHE_PREFIX',
+    'COMPILER_DEFAULT_FEATURES',
+    'perform_lexical_analysis_event',
+    'perform_syntactic_analysis_event',
+    'perform_semantic_analysis_event',
+    'check_common_conformance_event',
+    '_conformance_event',
+    'emit_scan_result_event',
+    'emit_parse_result_event',
+    'emit_semantic_result_event',
+    'emit_codegen_result_event',
+    'generate_code_event',
+    'optimize_code_event',
+    'load_from_ast_event',
     'get_feature',
     'feature.steps',
     'feature.yml',
@@ -139,22 +155,6 @@ def _context(resolver=None, cache=None):
     resolver = resolver if resolver is not None else _resolver()
     return CompilerFeatureContext(cache, resolver), cache, resolver
 
-# ** function: _kwargs_for
-def _kwargs_for(resolver, service_id):
-    '''
-    Return the kwargs recorded for one execute.
-
-    :param resolver: The recording resolver.
-    :type resolver: object
-    :param service_id: The service id whose execute kwargs are needed.
-    :type service_id: str
-    :return: The recorded kwargs.
-    :rtype: dict
-    '''
-
-    # One ask resolves each id once.
-    return next(kwargs for sid, kwargs in resolver.executed if sid == service_id)
-
 # ** function: _payload
 def _payload(exc):
     '''
@@ -178,6 +178,7 @@ def test_registry_omits_domain_type() -> None:
     '''
 
     # The class body does not assign a domain type, so Feature stays put.
+    assert issubclass(CompilerFeatureContext, FeatureContext)
     assert 'domain_type' not in CompilerFeatureContext.__dict__
     assert BaseContext.for_domain(Feature) is FeatureContext
 
@@ -193,326 +194,45 @@ def test_registry_omits_domain_type() -> None:
     assert context.cache is cache
     assert context.get_dependency is resolver
 
-    # The public ask has no request parameter and no positional flags.
-    run_step = inspect.signature(CompilerFeatureContext.run_step)
-    assert list(run_step.parameters) == ['self', 'step', 'kwargs']
-    assert 'request' not in run_step.parameters
+    # The step runner and its helpers are gone.
+    for name in ('run_step', 'execute_asked_step', '_resolve_and_execute', '_run_conformance', '_run_codegen'):
+        assert not hasattr(CompilerFeatureContext, name)
+
+# ** test: resolve_and_execute_signature
+def test_resolve_and_execute_signature() -> None:
+    '''
+    Test that the execution method takes a service id and event kwargs only.
+    '''
+
+    # No step parameter, no request, and no positional flags.
+    signature = inspect.signature(CompilerFeatureContext.resolve_and_execute)
+    assert list(signature.parameters) == ['self', 'service_id', 'event_kwargs']
+    assert signature.parameters['event_kwargs'].kind == inspect.Parameter.VAR_KEYWORD
+    assert 'step' not in signature.parameters
     assert not any(
         parameter.kind == inspect.Parameter.VAR_POSITIONAL
-        for parameter in run_step.parameters.values()
-    )
-    assert not hasattr(CompilerFeatureContext, 'execute_asked_step')
-
-# ** test: asked_steps_and_dialect_ids
-def test_asked_steps_and_dialect_ids() -> None:
-    '''
-    Test the five asked strings and the ten dialect service ids.
-    '''
-
-    # Catalog ids are not asks. The hyphen is the spelling.
-    assert ASKED_STEPS == (
-        'scan',
-        'parse',
-        'semantic',
-        'compile',
-        'compile-from-ast',
+        for parameter in signature.parameters.values()
     )
 
-    # contexts maps to the singular service id, not the class name.
-    assert DIALECT_SERVICE_ID == {
-        'assets': 'check_asset_conformance_event',
-        'blueprints': 'check_blueprints_conformance_event',
-        'contexts': 'check_context_conformance_event',
-        'di': 'check_di_conformance_event',
-        'domain': 'check_domain_conformance_event',
-        'events': 'check_event_conformance_event',
-        'interfaces': 'check_interface_conformance_event',
-        'mappers': 'check_mapper_conformance_event',
-        'repos': 'check_repos_conformance_event',
-        'utils': 'check_utils_conformance_event',
-    }
-
-# ** test: each_component_resolves_one_dialect
-def test_each_component_resolves_one_dialect() -> None:
+# ** test: resolve_and_execute_calls_execute
+def test_resolve_and_execute_calls_execute() -> None:
     '''
-    Test that each component string resolves only its dialect id.
+    Test that one id is resolved with no flags and its execute result returned.
     '''
 
-    # The other nine ids stay unresolved, including the plural contexts name.
-    for component, service_id in DIALECT_SERVICE_ID.items():
-        resolver = _resolver()
-        context, _, _ = _context(resolver=resolver)
-        context.run_step('semantic', component=component, source_file='a.py')
-        dialects = [
-            sid for sid in resolver.resolved
-            if sid != 'check_common_conformance_event' and sid.startswith('check_')
-        ]
-        assert dialects == [service_id]
-        assert 'check_contexts_conformance_event' not in resolver.resolved
-
-# ** test: scan_passes_lexical_return
-def test_scan_passes_lexical_return() -> None:
-    '''
-    Test that scan resolves two ids and emits the lexical return.
-    '''
-
-    # A passed component is not a scan argument.
-    context, cache, resolver = _context()
-    result = context.run_step(
-        'scan',
-        source_file='a.py',
-        component='domain',
-        output='out.yml',
-    )
-
-    # Only the two scan ids run, in order.
-    assert resolver.resolved == [
-        'perform_lexical_analysis_event',
-        'emit_scan_result_event',
+    # The resolver sees the id only. Execute sees the kwargs only.
+    context, _, resolver = _context()
+    result = context.resolve_and_execute('perform_lexical_analysis_event', source_file='a.py')
+    assert resolver.resolved == ['perform_lexical_analysis_event']
+    assert resolver.executed == [
+        ('perform_lexical_analysis_event', {'source_file': 'a.py'}),
     ]
-    lexical = resolver.results['perform_lexical_analysis_event']
-    emit = _kwargs_for(resolver, 'emit_scan_result_event')
-    assert emit['tokens'] is lexical
-    assert emit['source_file'] == 'a.py'
-    assert emit['output'] == 'out.yml'
-    assert 'component' not in emit
-    assert 'cache' not in emit
-    assert 'provision_prefix' not in emit
-    assert result is resolver.results['emit_scan_result_event']
-    assert result is not lexical
-    assert context.cache is cache
+    assert result is resolver.results['perform_lexical_analysis_event']
 
-# ** test: parse_passes_syntactic_return
-def test_parse_passes_syntactic_return() -> None:
-    '''
-    Test that parse skips the scan emit and can return an empty string.
-    '''
-
-    # The empty emit sentinel must remain the return, not a replacement.
-    resolver = _resolver(results={'emit_parse_result_event': ''})
-    context, _, _ = _context(resolver=resolver)
-    result = context.run_step(
-        'parse',
-        source_file='a.py',
-        include_tokens=True,
-        extract='name',
-    )
-
-    # Syntactic tokens are the lexical return. The emit ast is the syntactic return.
-    assert resolver.resolved == [
-        'perform_lexical_analysis_event',
-        'perform_syntactic_analysis_event',
-        'emit_parse_result_event',
-    ]
-    assert 'emit_scan_result_event' not in resolver.resolved
-    lexical = resolver.results['perform_lexical_analysis_event']
-    syntactic = resolver.results['perform_syntactic_analysis_event']
-    assert _kwargs_for(resolver, 'perform_syntactic_analysis_event')['tokens'] is lexical
-    emit = _kwargs_for(resolver, 'emit_parse_result_event')
-    assert emit['ast'] is syntactic
-    assert emit['tokens'] is lexical
-    assert emit['include_tokens'] is True
-    assert emit['extract'] == 'name'
-    assert result == ''
-    assert result is resolver.results['emit_parse_result_event']
-
-# ** test: semantic_passes_analysis_returns
-def test_semantic_passes_analysis_returns() -> None:
-    '''
-    Test that semantic hands the syntactic return forward and emits once.
-    '''
-
-    # A caller prefix must not replace the imported constant.
-    context, cache, resolver = _context()
-    result = context.run_step(
-        'semantic',
-        component='domain',
-        source_file='a.py',
-        provision_prefix=('not', 'the', 'prefix'),
-        feature_id='semantic.module',
-        request=object(),
-        marker='x',
-    )
-
-    # Earlier emits do not run. Only the domain dialect is resolved.
-    assert resolver.resolved == [
-        'perform_lexical_analysis_event',
-        'perform_syntactic_analysis_event',
-        'perform_semantic_analysis_event',
-        'check_common_conformance_event',
-        'check_domain_conformance_event',
-        'emit_semantic_result_event',
-    ]
-    assert 'emit_scan_result_event' not in resolver.resolved
-    assert 'emit_parse_result_event' not in resolver.resolved
-    syntactic = resolver.results['perform_syntactic_analysis_event']
-    semantic = resolver.results['perform_semantic_analysis_event']
-    common = resolver.results['check_common_conformance_event']
-    dialect = resolver.results['check_domain_conformance_event']
-
-    # Analysis and both checks see that ast, the cache, and the one prefix.
-    analysis = _kwargs_for(resolver, 'perform_semantic_analysis_event')
-    assert analysis['ast'] is syntactic
-    assert analysis['cache'] is cache
-    assert analysis['provision_prefix'] is COMPILER_PROVISION_CACHE_PREFIX
-    assert 'source_file' not in analysis
-    common_kwargs = _kwargs_for(resolver, 'check_common_conformance_event')
-    assert common_kwargs['ast'] is syntactic
-    assert common_kwargs['semantic'] is semantic
-    assert common_kwargs['cache'] is cache
-    assert common_kwargs['provision_prefix'] is COMPILER_PROVISION_CACHE_PREFIX
-    dialect_kwargs = _kwargs_for(resolver, 'check_domain_conformance_event')
-    assert dialect_kwargs['findings'] is common
-    assert dialect_kwargs['ast'] is syntactic
-    assert dialect_kwargs['cache'] is cache
-
-    # The emit receives the syntactic return, not a dump, and no include_ast.
-    emit = _kwargs_for(resolver, 'emit_semantic_result_event')
-    assert emit['ast'] is syntactic
-    assert emit['semantic'] is semantic
-    assert emit['findings'] is dialect
-    assert 'include_ast' not in emit
-    assert 'feature_id' not in emit
-    assert 'request' not in emit
-    assert 'marker' not in emit
-    assert 'step' not in emit
-    assert result is resolver.results['emit_semantic_result_event']
-
-# ** test: semantic_forwards_include_ast_when_supplied
-def test_semantic_forwards_include_ast_when_supplied() -> None:
-    '''
-    Test that include_ast is forwarded only on the semantic emit.
-    '''
-
-    # The flag does not replace the syntactic object.
-    context, _, resolver = _context()
-    context.run_step('semantic', component='domain', include_ast=False, source_file='a.py')
-    emit = _kwargs_for(resolver, 'emit_semantic_result_event')
-    assert emit['include_ast'] is False
-    assert emit['ast'] is resolver.results['perform_syntactic_analysis_event']
-
-# ** test: compile_continues_after_findings
-def test_compile_continues_after_findings() -> None:
-    '''
-    Test that compile skips earlier emits and still generates.
-    '''
-
-    # A non-empty findings sentinel must not skip the codegen tail.
-    resolver = _resolver(results={'check_utils_conformance_event': ['kept']})
-    context, _, _ = _context(resolver=resolver)
-    result = context.run_step('compile', component='utils', source_file='a.py')
-
-    # The three earlier emits stay unresolved.
-    assert 'emit_scan_result_event' not in resolver.resolved
-    assert 'emit_parse_result_event' not in resolver.resolved
-    assert 'emit_semantic_result_event' not in resolver.resolved
-    assert resolver.resolved == [
-        'perform_lexical_analysis_event',
-        'perform_syntactic_analysis_event',
-        'perform_semantic_analysis_event',
-        'check_common_conformance_event',
-        'check_utils_conformance_event',
-        'generate_code_event',
-        'optimize_code_event',
-        'emit_codegen_result_event',
-    ]
-    syntactic = resolver.results['perform_syntactic_analysis_event']
-    generated = _kwargs_for(resolver, 'generate_code_event')
-    assert generated['ast'] is syntactic
-    assert generated['component'] == 'utils'
-    assert generated['component'] != 'events'
-    assert 'cache' not in generated
-    optimized = _kwargs_for(resolver, 'optimize_code_event')
-    assert 'O' not in optimized
-    assert optimized['codegen'] is resolver.results['generate_code_event']
-    emitted = _kwargs_for(resolver, 'emit_codegen_result_event')
-    assert emitted['codegen'] is resolver.results['optimize_code_event']
-    assert result is resolver.results['emit_codegen_result_event']
-
-    # The asked component is passed through, including events.
-    events = _resolver()
-    events_context, _, _ = _context(resolver=events)
-    events_context.run_step('compile', component='events', optimization='O1')
-    assert _kwargs_for(events, 'generate_code_event')['component'] == 'events'
-    assert _kwargs_for(events, 'optimize_code_event')['O'] == 'O1'
-    assert 'optimization' not in _kwargs_for(events, 'optimize_code_event')
-
-# ** test: compile_from_ast_uses_load_return
-def test_compile_from_ast_uses_load_return() -> None:
-    '''
-    Test that compile-from-ast loads, then analyzes, and does not reparse.
-    '''
-
-    # The load return is the ast for analysis and for generate.
-    context, _, resolver = _context()
-    context.run_step('compile-from-ast', component='assets', source_file='saved.json')
-
-    # No lexical event, no syntactic event, and no semantic emit.
-    assert 'perform_lexical_analysis_event' not in resolver.resolved
-    assert 'perform_syntactic_analysis_event' not in resolver.resolved
-    assert 'emit_semantic_result_event' not in resolver.resolved
-    assert resolver.resolved[0] == 'load_from_ast_event'
-    loaded = resolver.results['load_from_ast_event']
-    assert _kwargs_for(resolver, 'perform_semantic_analysis_event')['ast'] is loaded
-    assert _kwargs_for(resolver, 'generate_code_event')['ast'] is loaded
-    assert _kwargs_for(resolver, 'generate_code_event')['component'] == 'assets'
-    assert _kwargs_for(resolver, 'check_common_conformance_event')['ast'] is loaded
-
-# ** test: unknown_step_does_not_resolve
-def test_unknown_step_does_not_resolve() -> None:
-    '''
-    Test that a miss raises before the resolver is called.
-    '''
-
-    # Catalog ids, a blank, and None are not asks. Do not translate them.
-    context, _, resolver = _context()
-    for step in ('compile.ast', 'scan.module', '', None, 'Scan', 'compile_from_ast'):
-        with pytest.raises(TiferetError) as exc:
-            context.run_step(step)
-        assert exc.value.error_code == 'ASKED_STEP_UNKNOWN'
-        assert exc.value.kwargs['step'] == step
-        assert _payload(exc)['message'] == (
-            f"Asked step '{step}' is not one of: "
-            'scan, parse, semantic, compile, compile-from-ast.'
-        )
-    assert resolver.resolved == []
-
-# ** test: component_required_does_not_resolve
-def test_component_required_does_not_resolve() -> None:
-    '''
-    Test that a bad component fails before the resolver is called.
-    '''
-
-    # A missing key is reported as None. An empty string is not stripped.
-    context, _, resolver = _context()
-    cases = (
-        ('semantic', {}, None),
-        ('compile', {'component': ''}, ''),
-        ('compile-from-ast', {'component': 'widget'}, 'widget'),
-    )
-    for step, kwargs, component in cases:
-        with pytest.raises(TiferetError) as exc:
-            context.run_step(step, **kwargs)
-        assert exc.value.error_code == 'COMPONENT_REQUIRED'
-        assert exc.value.kwargs['step'] == step
-        assert exc.value.kwargs['component'] == component
-        assert _payload(exc)['message'] == (
-            f"Asked step '{step}' requires one of the ten component strings. "
-            f'Got {component}.'
-        )
-    assert resolver.resolved == []
-
-# ** test: scan_and_parse_do_not_require_component
-def test_scan_and_parse_do_not_require_component() -> None:
-    '''
-    Test that scan and parse run when no component was passed.
-    '''
-
-    # A missing component is not an error on these two asks.
-    context, _, resolver = _context()
-    context.run_step('scan')
-    context.run_step('parse')
-    assert 'perform_lexical_analysis_event' in resolver.resolved
+    # The id is not branched on. Any id is resolved the same way.
+    context.resolve_and_execute('any_service_event')
+    assert resolver.resolved[-1] == 'any_service_event'
+    assert resolver.executed[-1] == ('any_service_event', {})
 
 # ** test: missing_resolver_raises_before_resolve
 def test_missing_resolver_raises_before_resolve() -> None:
@@ -523,7 +243,7 @@ def test_missing_resolver_raises_before_resolve() -> None:
     # Calling None would be a different error. This one is named.
     context = CompilerFeatureContext(CacheContext(), None)
     with pytest.raises(TiferetError) as exc:
-        context.run_step('scan', source_file='a.py')
+        context.resolve_and_execute('perform_lexical_analysis_event', source_file='a.py')
     assert exc.value.error_code == 'RESOLVER_REQUIRED'
     assert _payload(exc)['message'] == 'CompilerFeatureContext requires get_dependency.'
 
@@ -533,27 +253,27 @@ def test_failed_resolve_does_not_execute() -> None:
     Test that a raising or empty resolve does not call execute.
     '''
 
-    # A raised resolve names the id and does not call execute.
+    # A raised resolve names the id only and does not call execute.
     raising = _resolver(fail=RuntimeError('missing'))
     context, _, _ = _context(resolver=raising)
     with pytest.raises(TiferetError) as exc:
-        context.run_step('scan', source_file='a.py')
+        context.resolve_and_execute('perform_lexical_analysis_event', source_file='a.py')
     assert exc.value.error_code == 'EVENT_NOT_RESOLVED'
-    assert exc.value.kwargs['service_id'] == 'perform_lexical_analysis_event'
-    assert exc.value.kwargs['step'] == 'scan'
+    assert exc.value.kwargs == {'service_id': 'perform_lexical_analysis_event'}
+    assert 'step' not in exc.value.kwargs
     assert raising.executed == []
-    assert _payload(exc)['message'] == (
-        "Failed to resolve perform_lexical_analysis_event for asked step 'scan'."
-    )
+    assert _payload(exc)['message'] == 'Failed to resolve perform_lexical_analysis_event.'
 
     # A None resolve is the same refusal, and that id's execute is not called.
     empty = _resolver(none_ids=('perform_lexical_analysis_event',))
     empty_context, _, _ = _context(resolver=empty)
     with pytest.raises(TiferetError) as exc:
-        empty_context.run_step('parse', source_file='a.py')
+        empty_context.resolve_and_execute('perform_lexical_analysis_event', source_file='a.py')
     assert exc.value.error_code == 'EVENT_NOT_RESOLVED'
-    assert exc.value.kwargs['service_id'] == 'perform_lexical_analysis_event'
+    assert exc.value.kwargs == {'service_id': 'perform_lexical_analysis_event'}
+    assert empty.resolved == ['perform_lexical_analysis_event']
     assert empty.executed == []
+    assert _payload(exc)['message'] == 'Failed to resolve perform_lexical_analysis_event.'
 
 # ** test: inherited_lookup_refuses
 def test_inherited_lookup_refuses(monkeypatch) -> None:
@@ -604,8 +324,8 @@ def test_inherited_lookup_refuses(monkeypatch) -> None:
     assert called == []
     assert resolver.resolved == []
 
-# ** test: module_source_refuses_feature_walk
-def test_module_source_refuses_feature_walk() -> None:
+# ** test: module_source_forbidden_strings
+def test_module_source_forbidden_strings() -> None:
     '''
     Test that the module source does not name a feature walk or a forbidden import.
     '''
@@ -628,7 +348,11 @@ def test_module_source_refuses_feature_walk() -> None:
         assert forbidden not in imported
         assert not any(name.startswith(forbidden + '.') for name in imported)
 
-    # The package marker does not import this module.
+    # The feature context does not import the session.
+    assert 'session' not in imported
+    assert not any(name.endswith('.session') for name in imported)
+
+    # The package marker imports neither context module.
     init_tree = ast.parse((_CONTEXTS_DIR / '__init__.py').read_text(encoding='utf-8'))
     init_names = []
     for node in ast.walk(init_tree):
@@ -638,3 +362,4 @@ def test_module_source_refuses_feature_walk() -> None:
             init_names.append(node.module or '')
             init_names.extend(alias.name for alias in node.names)
     assert 'feature' not in init_names
+    assert 'session' not in init_names
