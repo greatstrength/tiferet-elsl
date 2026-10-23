@@ -377,7 +377,9 @@ def end_of_input_position(lexemes: List[Any]) -> dict:
     Return the position keys for a parse error raised at end of input.
 
     The last real lexeme is the last one that is not an indent, a dedent, or
-    a newline. Open blocks are indents that no dedent closed.
+    a newline. Open blocks are indents that no dedent closed. A stream from
+    the tiferet-ly layout filter closes every level it opens, so the open-block
+    keys are a guard for a supplied stream that leaves a block open.
 
     :param lexemes: The lexeme stream the parser received.
     :type lexemes: List[Any]

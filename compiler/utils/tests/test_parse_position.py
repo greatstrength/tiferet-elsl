@@ -2,6 +2,9 @@
 
 # *** imports
 
+# ** core
+from typing import Any, List, Optional
+
 # ** infra
 import pytest
 from tiferet.interfaces.core import ServiceError
@@ -19,26 +22,26 @@ from .parser_test_helpers import (
 
 # *** constants
 
-# ** constant: open_block_probe
-OPEN_BLOCK_PROBE = '''"""EOF probe"""
+# ** constant: block_probe
+BLOCK_PROBE = '''"""EOF probe"""
 
 # *** functions
 
 # ** function: probe
 def probe(x: int) -> int:
-  \'\'\'
-  Return x.
+    \'\'\'
+    Return x.
 
-  :param x: The value.
-  :type x: int
-  :return: The value.
-  :rtype: int
-  \'\'\'
+    :param x: The value.
+    :type x: int
+    :return: The value.
+    :rtype: int
+    \'\'\'
 
-  # Copy the value.
-  y = x
-  # A comment at the block column.
-  return y
+    # Copy the value.
+    y = x
+    # A comment at the block column.
+    return y
 '''
 
 # ** constant: header_probe
@@ -50,13 +53,23 @@ HEADER_PROBE = '''"""Header probe"""
 def probe(x: int) -> int:
 '''
 
+# ** constant: trailing_header
+TRAILING_HEADER = '''
+# ** function: other
+def other() -> None:
+'''
+
+# ** constant: end_of_input_probe
+END_OF_INPUT_PROBE = BLOCK_PROBE + TRAILING_HEADER
+
 # ** constant: token_probe
-TOKEN_PROBE = OPEN_BLOCK_PROBE.replace('  y = x\n', '  y = = x\n')
+TOKEN_PROBE = BLOCK_PROBE.replace('    y = x\n', '    y = = x\n')
 
 # ** constant: truncated_corpus
 TRUNCATED_CORPUS = {
-    'two_space_indent': OPEN_BLOCK_PROBE,
-    'tab_indent': OPEN_BLOCK_PROBE.replace('\n  ', '\n\t'),
+    'two_space_indent': BLOCK_PROBE.replace('\n    ', '\n  '),
+    'tab_indent_header_at_eof': BLOCK_PROBE.replace('\n    ', '\n\t') + TRAILING_HEADER,
+    'body_then_header_at_eof': END_OF_INPUT_PROBE,
     'def_header_at_eof': HEADER_PROBE,
     'def_header_at_eof_no_newline': HEADER_PROBE.rstrip('\n'),
     'unclosed_call': HEADER_PROBE + "    '''\n    Return x.\n    '''\n\n    # Call.\n    y = max(x,\n",
@@ -66,27 +79,42 @@ TRUNCATED_CORPUS = {
 
 # *** functions
 
-# ** function: _parse_error
-def _parse_error(text: str) -> ServiceError:
+# ** function: _tokenize
+def _tokenize(text: str) -> List[Any]:
     '''
-    Tokenize and parse a source text, and return the parse error it raises.
+    Tokenize a source text against the declared catalogues.
 
     :param text: The source text.
     :type text: str
+    :return: The recognized token stream.
+    :rtype: List[Any]
+    '''
+
+    # Use the declared catalogues, as the lexical event does.
+    return TiferetLexer().tokenize(text, load_token_rules(), load_grammar_rules())
+
+# ** function: _parse_error
+def _parse_error(text: str, stream: Optional[List[Any]] = None) -> ServiceError:
+    '''
+    Parse a source text, and return the parse error it raises.
+
+    :param text: The source text.
+    :type text: str
+    :param stream: A token stream to parse instead of the text's own tokens.
+    :type stream: Optional[List[Any]]
     :return: The raised error.
     :rtype: ServiceError
     '''
 
     # Use the declared catalogues, as the lexical and syntactic events do.
-    tokens = load_token_rules()
-    grammars = load_grammar_rules()
-    stream = TiferetLexer().tokenize(text, tokens, grammars)
+    if stream is None:
+        stream = _tokenize(text)
     with pytest.raises(ServiceError) as raised:
         TiferetParser().parse(
             'probe',
             stream,
-            grammars,
-            tokens,
+            load_grammar_rules(),
+            load_token_rules(),
             load_production_rules(),
             source_text=text,
         )
@@ -95,20 +123,39 @@ def _parse_error(text: str) -> ServiceError:
 
 # *** tests
 
+# ** test: block_probe_parses
+def test_block_probe_parses() -> None:
+    '''
+    Test that the block probe parses, so a probe built on it fails only where it differs.
+    '''
+
+    # The 4-space body opens one block and closes it at end of input.
+    stream = _tokenize(BLOCK_PROBE)
+    types = [token.type for token in stream]
+    assert (types.count(a.lexer.INDENT), types.count(a.lexer.DEDENT)) == (1, 1)
+    TiferetParser().parse(
+        'probe',
+        stream,
+        load_grammar_rules(),
+        load_token_rules(),
+        load_production_rules(),
+        source_text=BLOCK_PROBE,
+    )
+
 # ** test: end_of_input_error_has_position
 def test_end_of_input_error_has_position() -> None:
     '''
     Test that an end-of-input parse error carries at_end and the last real token.
     '''
 
-    # The block never closes, so the error arrives at end of input.
-    error = _parse_error(OPEN_BLOCK_PROBE)
+    # The trailing def header has no body, so the error arrives at end of input.
+    error = _parse_error(END_OF_INPUT_PROBE)
 
-    # The position is the return y line, the last real token, with an offset.
+    # The position is the trailing header's colon, the last real token, with an offset.
     assert error.kwargs['at_end'] is True
-    assert error.kwargs['lineno'] == 19
+    assert error.kwargs['lineno'] == 22
     assert error.kwargs['lexpos'] is not None
-    assert (error.kwargs['type'], error.kwargs['value']) == (a.lexer.IDENTIFIER, 'y')
+    assert (error.kwargs['type'], error.kwargs['value']) == (a.lexer.COLON, ':')
 
     # The original payload stays, and the original error is the cause.
     assert error.message == 'Syntax error.'
@@ -116,16 +163,32 @@ def test_end_of_input_error_has_position() -> None:
     assert isinstance(error.__cause__, ServiceError)
     assert 'lineno' not in error.__cause__.kwargs
 
+# ** test: end_of_input_error_closed_blocks
+def test_end_of_input_error_closed_blocks() -> None:
+    '''
+    Test that an end-of-input parse error after a closed block has no open-block keys.
+    '''
+
+    # The layout filter closes the function body before the trailing header.
+    error = _parse_error(END_OF_INPUT_PROBE)
+    assert 'open_blocks' not in error.kwargs
+    assert 'open_block_lineno' not in error.kwargs
+
 # ** test: end_of_input_error_reports_open_block
 def test_end_of_input_error_reports_open_block() -> None:
     '''
-    Test that an end-of-input parse error names the innermost unclosed block.
+    Test that an end-of-input parse error names a block the supplied stream left open.
     '''
 
-    # The function body indent on the docstring line never closes.
-    error = _parse_error(OPEN_BLOCK_PROBE)
-    assert error.kwargs['open_blocks'] >= 1
-    assert error.kwargs['open_block_lineno'] == 7
+    # A stream with an indent no dedent closes; the layout filter never emits one.
+    stream = _tokenize(HEADER_PROBE)
+    stream.append(tok(a.lexer.INDENT, '', lineno=7, lexpos=len(HEADER_PROBE)))
+    error = _parse_error(HEADER_PROBE, stream)
+
+    # The position is still the colon; the open block is the indent's line.
+    assert error.kwargs['at_end'] is True
+    assert (error.kwargs['type'], error.kwargs['lineno']) == (a.lexer.COLON, 6)
+    assert (error.kwargs['open_blocks'], error.kwargs['open_block_lineno']) == (1, 7)
 
 # ** test: end_of_input_error_without_open_block
 def test_end_of_input_error_without_open_block() -> None:
