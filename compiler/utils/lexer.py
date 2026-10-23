@@ -3,10 +3,11 @@
 # *** imports
 
 # ** core
-from typing import List
+from typing import Dict, List
 
 # ** infra
 from tiferet_ly.domain.grammar import Grammar
+from tiferet_ly.domain.layout import LayoutProfile
 from tiferet_ly.domain.token import TokenRule
 from tiferet_ly.mappers.lexeme import LexemeAggregate
 from tiferet_ly.utils.layout import LayoutFilter
@@ -21,6 +22,103 @@ from .. import assets as a
 
 # ** constant: grammar_id
 GRAMMAR_ID = 'tiferet_dialect'
+
+# *** functions
+
+# ** function: _lift_standalone_comments
+def _lift_standalone_comments(lexemes: List[LexemeAggregate], profile: LayoutProfile) -> tuple:
+    '''
+    Hold standalone comment lines out of the stream that layout reads.
+
+    A standalone comment is a line comment that starts its line outside any
+    open delimiter and is followed by its newline. The comment and that
+    newline are held together, keyed by the next lexeme that is not a newline.
+
+    :param lexemes: The raw lexeme stream, before layout.
+    :type lexemes: List[LexemeAggregate]
+    :param profile: The layout profile that names the open and close delimiters.
+    :type profile: LayoutProfile
+    :return: The kept stream, the held pairs by anchor identity, and the pairs held at end of input.
+    :rtype: tuple
+    '''
+
+    # Walk the raw stream once, tracking delimiter depth as layout does.
+    kept = []
+    held = {}
+    pending = []
+    depth = 0
+    prev_type = None
+    index = 0
+    while index < len(lexemes):
+        lexeme = lexemes[index]
+
+        # A comment that starts its line outside delimiters is held with its newline.
+        if (
+            lexeme.type == a.lexer.LINE_COMMENT
+            and depth == 0
+            and prev_type in (None, a.lexer.NEWLINE)
+            and index + 1 < len(lexemes)
+            and lexemes[index + 1].type == a.lexer.NEWLINE
+        ):
+            pending.extend([lexeme, lexemes[index + 1]])
+            prev_type = a.lexer.NEWLINE
+            index += 2
+            continue
+
+        # The first kept lexeme that is not a newline anchors the held pairs.
+        if pending and lexeme.type != a.lexer.NEWLINE:
+            held[id(lexeme)] = pending
+            pending = []
+
+        # Keep the lexeme and update the delimiter depth.
+        if lexeme.type in profile.open_delimiters:
+            depth += 1
+        elif lexeme.type in profile.close_delimiters:
+            depth = max(0, depth - 1)
+        kept.append(lexeme)
+        prev_type = lexeme.type
+        index += 1
+
+    # Pairs with no later code line are held for the end of input.
+    return kept, held, pending
+
+# ** function: _restore_standalone_comments
+def _restore_standalone_comments(laid: List[LexemeAggregate],
+                                 held: Dict[int, List[LexemeAggregate]],
+                                 tail: List[LexemeAggregate]) -> List[LexemeAggregate]:
+    '''
+    Put held comment lines back after layout has run.
+
+    Each held pair goes immediately before its anchor, after the indent and
+    dedent run injected for that line. Pairs held at end of input go before
+    the final dedent run.
+
+    :param laid: The kept stream after layout.
+    :type laid: List[LexemeAggregate]
+    :param held: The held pairs keyed by anchor identity.
+    :type held: Dict[int, List[LexemeAggregate]]
+    :param tail: The pairs held at end of input.
+    :type tail: List[LexemeAggregate]
+    :return: The stream with every held comment line restored in order.
+    :rtype: List[LexemeAggregate]
+    '''
+
+    # Buffer each layout run so the comments land after it.
+    restored = []
+    layout_run = []
+    for lexeme in laid:
+        if lexeme.type in (a.lexer.INDENT, a.lexer.DEDENT):
+            layout_run.append(lexeme)
+            continue
+        restored.extend(layout_run)
+        restored.extend(held.get(id(lexeme), []))
+        restored.append(lexeme)
+        layout_run = []
+
+    # End-of-input comments go before the final dedent run.
+    restored.extend(tail)
+    restored.extend(layout_run)
+    return restored
 
 # *** utils
 
@@ -88,8 +186,11 @@ class TiferetLexer(LexerService):
             ))
 
         # Apply declared layout only when indent and dedent injection is requested.
+        # Standalone comment lines are held out so they do not move the block column.
         if layout_profile is not None:
-            lexemes = LayoutFilter.apply(lexemes, layout_profile, text)
+            kept, held, tail = _lift_standalone_comments(lexemes, layout_profile)
+            laid = LayoutFilter.apply(kept, layout_profile, text)
+            lexemes = _restore_standalone_comments(laid, held, tail)
 
         # Normalize injected layout tokens so indent and dedent values are empty strings.
         normalized = []
