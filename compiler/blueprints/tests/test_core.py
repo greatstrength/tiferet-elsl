@@ -112,7 +112,7 @@ def test_build_cache_source_wraps_and_stacks() -> None:
             blueprint_imports.append((node.module, tuple((alias.name, alias.asname) for alias in node.names)))
     assert blueprint_imports == [
         (
-            'tiferet.blueprints.core',
+            'tiferet.blueprints.app',
             (
                 (
                     'build_cache',
