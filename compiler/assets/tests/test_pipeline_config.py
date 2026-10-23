@@ -181,6 +181,28 @@ def test_component_flag_required_on_semantic_bearing_commands() -> None:
     assert component_args(command_args(cli, 'scan', 'module')) == []
     assert component_args(command_args(cli, 'parse', 'module')) == []
 
+# ** test: optimization_flag_choices_on_compile_commands
+def test_optimization_flag_choices_on_compile_commands() -> None:
+    '''
+    Test that compile commands restrict -O to the documented O0 and O1 levels.
+    '''
+
+    # Load commands without booting the CLI.
+    cli = load_yaml('cli.yml')
+
+    # Both compile commands declare the shared -O flag once, with two choices and an O0 default.
+    for group_key, key in (
+        ('compile', 'module'),
+        ('compile', 'ast'),
+    ):
+        found = [
+            arg for arg in command_args(cli, group_key, key)
+            if '-O' in (arg.get('name_or_flags') or [])
+        ]
+        assert len(found) == 1
+        assert found[0]['choices'] == ['O0', 'O1']
+        assert found[0]['default'] == 'O0'
+
 # ** test: gated_dialect_steps_include_di_and_utils
 def test_gated_dialect_steps_include_di_and_utils() -> None:
     '''

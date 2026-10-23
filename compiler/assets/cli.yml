@@ -101,6 +101,9 @@ cli:
               - -O
             default: O0
             description: Optimization level. O0 leaves codegen unchanged. O1 shares repeated structures.
+            choices:
+              - O0
+              - O1
           - *component_arg
       ast:
         group_key: compile
