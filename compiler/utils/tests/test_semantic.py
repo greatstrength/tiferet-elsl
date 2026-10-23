@@ -384,7 +384,7 @@ def test_build_minimal_event(minimal_event_module: DeclarationAggregate) -> None
     assert class_symbols['execute']['kind'] == SYMBOL_KIND_METHOD
     assert result['scopes']['module.Ping']['children']['execute'] == 'module.Ping.execute'
 
-    # Parameters are recorded in the method scope, including their type kind.
+    # Parameters are recorded in the method scope, including their type name.
     assert method_symbols['self']['kind'] == SYMBOL_KIND_PARAMETER
     assert method_symbols['id']['kind'] == SYMBOL_KIND_PARAMETER
     assert method_symbols['id']['type_annotation'] == 'str'
@@ -411,6 +411,37 @@ def test_build_minimal_injection_event(
         'children',
         {},
     )
+
+# ** test: build_class_typed_parameter
+def test_build_class_typed_parameter() -> None:
+    '''
+    Test that a class-typed parameter records its class name, not the class kind.
+    '''
+
+    # A constructor injects a class-typed service and assigns it to self.
+    init = _func(
+        name='__init__',
+        params=[
+            ParamListAggregate.new(name='self'),
+            ParamListAggregate.new(
+                name='feature_service',
+                type=TypeAggregate.new_class_type(name='FeatureService'),
+            ),
+        ],
+        body=[
+            _assign_self('feature_service', 'feature_service'),
+        ],
+    )
+    module = _module('events', [
+        _decl(_class('FeatureEvent', [_decl(init)])),
+    ])
+
+    # Build the constructor scope and read its parameter symbols.
+    result = SymbolTableBuilder().build(module)
+    method_symbols = result['scopes']['module.FeatureEvent.__init__']['symbols']
+
+    # The parameter records the class name the assignment check compares.
+    assert method_symbols['feature_service']['type_annotation'] == 'FeatureService'
 
 # ** test: build_multiple_operator_events
 def test_build_multiple_operator_events(

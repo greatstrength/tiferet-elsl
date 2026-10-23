@@ -672,11 +672,11 @@ class SymbolTableBuilder(StatementWalker):
         :rtype: None
         '''
 
-        # Record the parameter type kind when both the type and its kind exist.
+        # Record the parameter type name (class name or primitive kind) when both the type and its kind exist.
         for current in params:
             type_annotation = None
             if current.type is not None and current.type.kind is not None:
-                type_annotation = current.type.kind.value
+                type_annotation = current.type.type_name
             self.current_scope.add_symbol(Symbol(
                 name=current.name,
                 kind=SYMBOL_KIND_PARAMETER,
