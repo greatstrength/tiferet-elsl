@@ -6,7 +6,7 @@
 from typing import Any, Dict
 
 # ** infra
-from tiferet.blueprints.core import build_cache as build_tiferet_cache
+from tiferet.blueprints.app import build_cache as build_tiferet_cache
 from tiferet.contexts.app import (
     add_default_app_services,
     add_default_app_sessions,
