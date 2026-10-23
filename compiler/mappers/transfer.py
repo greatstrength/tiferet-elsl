@@ -276,6 +276,7 @@ class DeclarationTransferObject(ArtifactDeclaration, TransferObject):
             artifact_type=getattr(model, 'artifact_type', None),
             artifact_role=getattr(model, 'artifact_role', None),
             artifact_qualifier=getattr(model, 'artifact_qualifier', None),
+            artifact_member_name=getattr(model, 'artifact_member_name', None),
             annotations=getattr(model, 'annotations', None),
             guide_path=getattr(model, 'guide_path', None),
         )
@@ -317,6 +318,7 @@ class DeclarationTransferObject(ArtifactDeclaration, TransferObject):
                 artifact_type=self.artifact_type,
                 artifact_role=self.artifact_role,
                 artifact_qualifier=self.artifact_qualifier,
+                artifact_member_name=self.artifact_member_name,
                 annotations=self.annotations,
                 guide_path=self.guide_path,
                 **common,

@@ -21,6 +21,7 @@ from ..parser import (
     make_position_helpers,
     parse_artifact_header,
     parse_member_kind,
+    parse_member_name,
     parse_member_qualifier,
     parse_see_guide_path,
     render_lambda_body,
@@ -105,6 +106,22 @@ def test_parse_member_qualifier() -> None:
     # A missing or empty pair is not a qualifier.
     assert parse_member_qualifier('# * init') is None
     assert parse_member_qualifier('# * method: execute ()') is None
+
+# ** test: parse_member_name
+def test_parse_member_name() -> None:
+    '''
+    Test the name after the colon, a qualified label, and the no-name cases.
+    '''
+
+    # The name follows the colon, without a trailing qualifier.
+    assert parse_member_name('# * method: execute') == 'execute'
+    assert parse_member_name('# * method: execute (static)') == 'execute'
+    assert parse_member_name('# * attribute: lang') == 'lang'
+
+    # init, a label with no colon, and an empty name capture nothing.
+    assert parse_member_name('# * init') is None
+    assert parse_member_name('# * method') is None
+    assert parse_member_name('# * method: ') is None
 
 # ** test: get_attribute_type_primitives
 def test_get_attribute_type_primitives() -> None:

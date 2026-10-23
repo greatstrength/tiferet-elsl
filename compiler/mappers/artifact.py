@@ -75,6 +75,7 @@ class ArtifactDeclarationAggregate(ArtifactDeclaration):
         member_body: Optional[StatementAggregate] = None,
         annots: Optional[list] = None,
         qualifier: Optional[str] = None,
+        member_name: Optional[str] = None,
         lineno: Optional[int] = None,
         col: Optional[int] = None,
     ) -> 'ArtifactDeclarationAggregate':
@@ -92,6 +93,8 @@ class ArtifactDeclarationAggregate(ArtifactDeclaration):
         :type annots: Optional[list]
         :param qualifier: The optional parenthetical qualifier.
         :type qualifier: Optional[str]
+        :param member_name: The optional member name captured from the label.
+        :type member_name: Optional[str]
         :param lineno: The optional source line.
         :type lineno: Optional[int]
         :param col: The optional 0-based column.
@@ -107,6 +110,7 @@ class ArtifactDeclarationAggregate(ArtifactDeclaration):
             artifact_type='ARTIFACT_MEMBER',
             artifact_role=name,
             artifact_qualifier=qualifier,
+            artifact_member_name=member_name,
             annotations=annots,
             lineno=lineno,
             col=col,

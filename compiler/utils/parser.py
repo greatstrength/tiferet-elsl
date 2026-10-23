@@ -139,6 +139,34 @@ def parse_member_qualifier(artifact_member_value: str) -> Optional[str]:
     inside = match.group(1).strip()
     return inside or None
 
+# ** function: parse_member_name
+def parse_member_name(artifact_member_value: str) -> Optional[str]:
+    '''
+    Read the member name from an artifact member token.
+
+    :param artifact_member_value: The raw member token, such as ``# * method: execute``.
+    :type artifact_member_value: str
+    :return: The stripped name after the colon, or None for no colon or an empty name.
+    :rtype: Optional[str]
+    '''
+
+    # Drop the member prefix. A label with no colon names no member.
+    text = artifact_member_value
+    if text.startswith('# * '):
+        text = text[len('# * '):]
+    if ':' not in text:
+        return None
+
+    # The name follows the first colon, without a trailing qualifier.
+    name = text.split(':', 1)[1]
+    match = re.search(r'\(([^()]*)\)\s*$', name)
+    if match:
+        name = name[:match.start()]
+
+    # An empty name is the same as no name.
+    name = name.strip()
+    return name or None
+
 # ** function: get_attribute_type
 def get_attribute_type(type_str: str, additional_types: Optional[Type] = None) -> Type:
     '''
@@ -497,6 +525,7 @@ class TiferetParser(ParserService):
             '$apply_annotations': PlyParser.apply_annotations,
             '$parse_member_kind': parse_member_kind,
             '$parse_member_qualifier': parse_member_qualifier,
+            '$parse_member_name': parse_member_name,
             '$get_attribute_type': get_attribute_type,
             '$render_lambda_body': render_lambda_body,
             '$attach_dangling_else': PlyParser.attach_dangling_else,

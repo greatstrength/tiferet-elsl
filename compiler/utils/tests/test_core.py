@@ -645,7 +645,14 @@ def test_unique_kind1_specifications_skip_non_matching_candidates() -> None:
             candidate = Statement(kind=StatementKind.PASS)
         assert spec.evaluate(candidate, context) == []
 
-    # Member-name capture stays out of scope.
+    # A member header returns its captured name; one built without returns None.
+    named = ArtifactDeclaration(
+        name='method',
+        artifact_type='ARTIFACT_MEMBER',
+        artifact_role='method',
+        artifact_member_name='fmt',
+    )
+    assert extract_member_name_from_metadata(named) == 'fmt'
     assert extract_member_name_from_metadata(header) is None
 
 # ** test: production_context_finds_enclosing_scope

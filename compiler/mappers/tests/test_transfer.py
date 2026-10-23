@@ -133,3 +133,21 @@ def test_map_restores_python_lists(sample_module: Decl) -> None:
     assert isinstance(restored.code, list)
     ping = restored.code[0].body[0].body[0].decl
     assert ping.members[0].artifact_role == 'method'
+
+# ** test: round_trip_keeps_artifact_member_name
+def test_round_trip_keeps_artifact_member_name() -> None:
+    '''
+    Test that a member name captured from the label survives a transfer round trip.
+    '''
+
+    # A labelled method member, serialized and mapped back.
+    member = ArtifactDecl.new_member_decl(
+        'method',
+        member_name='execute',
+    )
+    primitive = DeclarationTransferObject.from_model(member).to_primitive()
+    restored = DeclarationTransferObject.model_validate(primitive).map()
+
+    # The captured name is on the primitive and on the restored member.
+    assert primitive['artifact_member_name'] == 'execute'
+    assert restored.artifact_member_name == 'execute'

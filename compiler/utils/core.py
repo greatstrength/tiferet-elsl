@@ -165,19 +165,40 @@ def get_return_type_name(type_obj: Any) -> str:
 # ** function: extract_member_name_from_metadata
 def extract_member_name_from_metadata(decl: Declaration) -> Optional[str]:
     '''
-    Return the member identifier captured from an artifact-header token.
+    Return the member name the parser captured from the member label.
 
-    Member-header identifier capture is out of scope, so this always returns None.
+    The name is the text after the colon in ``# * method: <name>`` or
+    ``# * attribute: <name>``, without a trailing qualifier. It is None for
+    ``init`` labels, for a label with no colon, and for a hand-built member.
 
     :param decl: The member header declaration.
     :type decl: Declaration
-    :return: None.
+    :return: The captured member name, or None.
     :rtype: Optional[str]
     '''
 
-    # Identifier capture from the header token is deferred.
-    del decl
-    return None
+    # The parser stores the captured name on the member header.
+    return getattr(decl, 'artifact_member_name', None)
+
+# ** function: member_names_agree
+def member_names_agree(expected: str, actual: str) -> bool:
+    '''
+    Report whether a member label name agrees with the declared name.
+
+    Names compare without case and without leading or trailing underscores,
+    so ``section_keyword`` agrees with ``SECTION_KEYWORD`` and ``cache`` with
+    ``_cache``. This is the one place the comparison rule lives.
+
+    :param expected: The member name from the label.
+    :type expected: str
+    :param actual: The declared member name.
+    :type actual: str
+    :return: True when the names agree.
+    :rtype: bool
+    '''
+
+    # Normalize both sides the same way before comparing.
+    return expected.strip('_').lower() == actual.strip('_').lower()
 
 # ** function: declares_bound_domain_type
 def declares_bound_domain_type(candidate: Any, context: Any,
@@ -1994,11 +2015,11 @@ class AttributeMemberSpecification(Specification):
         if inner_decl is None:
             return []
 
-        # Name capture is out of scope, so the name-mismatch rule does not fire yet.
+        # A captured label name must agree with the declared attribute name.
         expected_name = extract_member_name_from_metadata(decl)
         findings = []
         self._append_type_finding(findings, decl, inner_decl, expected_name)
-        if expected_name and inner_decl.name != expected_name:
+        if expected_name and not member_names_agree(expected_name, inner_decl.name):
             findings.append({
                 'error_code': 'ATTRIBUTE_MEMBER_NAME_MISMATCH',
                 'message': (
@@ -2165,7 +2186,9 @@ class MethodMemberSpecification(Specification):
         '''
 
         # Init members, and members with no captured name, do not compare names.
-        if decl.name != 'method' or not expected_name or inner_decl.name == expected_name:
+        if decl.name != 'method' or not expected_name:
+            return
+        if member_names_agree(expected_name, inner_decl.name):
             return
 
         # Record the mismatch against the member header.

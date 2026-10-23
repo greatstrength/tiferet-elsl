@@ -37,6 +37,41 @@ from ..typecheck import ConformanceChecker
 # ** constant: fixtures_dir
 _FIXTURES_DIR = Path(__file__).resolve().parent / 'fixtures' / 'domain'
 
+# ** constant: member_name_probe
+_MEMBER_NAME_PROBE = '''"""Member name probe"""
+
+# *** imports
+
+# ** infra
+from pydantic import Field
+
+# ** app
+from .core import DomainObject
+
+# *** models
+
+# ** model: probe
+class Probe(DomainObject):
+    \'\'\'
+    A probe model.
+    \'\'\'
+
+    # * attribute: lang
+    language: str = Field(..., description='The language.')
+
+    # * method: fmt
+    def format(self) -> str:
+        \'\'\'
+        Return a label.
+
+        :return: The label.
+        :rtype: str
+        \'\'\'
+
+        # Return a fixed label.
+        return 'probe'
+'''
+
 # *** classes
 
 # ** class: _parser_harness
@@ -368,6 +403,38 @@ def _codes(module) -> list:
     # Codes are enough when the test does not cite a finding key.
     return [item['error_code'] for item in check_domain(module)]
 
+# ** function: check_source_findings
+def check_source_findings(tmp_path: Path, source: str) -> list:
+    '''
+    Parse source text and check it with the common and domain rule sets.
+
+    :param tmp_path: The pytest temporary directory.
+    :type tmp_path: Path
+    :param source: The module source text.
+    :type source: str
+    :return: Finding dicts, common first, then domain.
+    :rtype: list
+    '''
+
+    # Write the source so the harness parses it like a fixture.
+    path = tmp_path / 'probe.py'
+    path.write_text(source, encoding='utf-8')
+    module = _parser().parse_file(path)
+
+    # The semantic pipeline runs the common selector before the domain one.
+    cache = _provision_cache()
+    builder = SymbolTableBuilder(cache, COMPILER_PROVISION_CACHE_PREFIX)
+    builder.build(module)
+    findings = []
+    for selector in ('common.', 'domain.'):
+        findings.extend(ConformanceChecker(
+            builder.scopes,
+            cache,
+            selector,
+            COMPILER_PROVISION_CACHE_PREFIX,
+        ).check(module))
+    return findings
+
 # *** tests
 
 # ** test: conformant_modules_report_no_findings
@@ -642,3 +709,134 @@ def test_domain_attribute_violated_for_missing_description() -> None:
 
     # The missing description is the only finding.
     assert _codes(module) == ['DOMAIN_ATTRIBUTE_MISSING_DESCRIPTION']
+
+# ** test: member_name_mismatch_reported_for_attribute_and_method
+def test_member_name_mismatch_reported_for_attribute_and_method(tmp_path: Path) -> None:
+    '''
+    Test that labels naming other members yield one finding each, at the label line.
+
+    :param tmp_path: The pytest temporary directory.
+    :type tmp_path: Path
+    '''
+
+    # The lang and fmt labels disagree with language and format.
+    findings = check_source_findings(tmp_path, _MEMBER_NAME_PROBE)
+
+    # Each rule fires once, on the line of its member label.
+    assert [(item['error_code'], item['lineno']) for item in findings] == [
+        ('ATTRIBUTE_MEMBER_NAME_MISMATCH', 19),
+        ('METHOD_MEMBER_NAME_MISMATCH', 22),
+    ]
+    assert findings[0]['expected_name'] == 'lang'
+    assert findings[0]['actual_name'] == 'language'
+    assert findings[1]['expected_name'] == 'fmt'
+    assert findings[1]['actual_name'] == 'format'
+
+# ** test: member_name_satisfied_for_matching_labels
+def test_member_name_satisfied_for_matching_labels(tmp_path: Path) -> None:
+    '''
+    Test that labels naming the declared members yield no findings.
+
+    :param tmp_path: The pytest temporary directory.
+    :type tmp_path: Path
+    '''
+
+    # The labels now name language and format.
+    source = _MEMBER_NAME_PROBE.replace(
+        '# * attribute: lang', '# * attribute: language',
+    ).replace(
+        '# * method: fmt', '# * method: format',
+    )
+
+    # No rule fires.
+    assert check_source_findings(tmp_path, source) == []
+
+# ** test: member_name_kept_for_post_annotated_method
+def test_member_name_kept_for_post_annotated_method(tmp_path: Path) -> None:
+    '''
+    Test that a see annotation after the method label keeps the captured member name.
+
+    :param tmp_path: The pytest temporary directory.
+    :type tmp_path: Path
+    '''
+
+    # The see note follows the fmt label, so member_post_annotated builds the member.
+    source = _MEMBER_NAME_PROBE.replace(
+        '# * attribute: lang', '# * attribute: language',
+    ).replace(
+        '    # * method: fmt\n',
+        '    # * method: fmt\n    # >> see: x\n',
+    )
+    findings = check_source_findings(tmp_path, source)
+
+    # The method rule fires once, on the fmt label line.
+    assert [(item['error_code'], item['lineno']) for item in findings] == [
+        ('METHOD_MEMBER_NAME_MISMATCH', 22),
+    ]
+
+# ** test: member_name_compared_with_def_for_decorated_method
+@pytest.mark.parametrize('label, expected', [
+    ('execute', []),
+    ('exec', ['METHOD_MEMBER_NAME_MISMATCH']),
+])
+def test_member_name_compared_with_def_for_decorated_method(
+        tmp_path: Path, label: str, expected: list) -> None:
+    '''
+    Test that a decorated method compares its label with the def name.
+
+    :param tmp_path: The pytest temporary directory.
+    :type tmp_path: Path
+    :param label: The member name in the method label.
+    :type label: str
+    :param expected: The expected finding codes.
+    :type expected: list
+    '''
+
+    # The decorator sits between the label and def execute.
+    source = _MEMBER_NAME_PROBE.replace(
+        '# * attribute: lang', '# * attribute: language',
+    ).replace(
+        'from .core import DomainObject',
+        'from .core import DomainEvent, DomainObject',
+    ).replace(
+        '    # * method: fmt\n    def format(self) -> str:',
+        f"    # * method: {label}\n"
+        "    @DomainEvent.parameters_required(['id'])\n"
+        '    def execute(self) -> str:',
+    )
+
+    # The decorator is not the compared name.
+    findings = check_source_findings(tmp_path, source)
+    assert [item['error_code'] for item in findings] == expected
+
+# ** test: member_name_agrees_without_case_or_edge_underscores
+@pytest.mark.parametrize('label, declared', [
+    ('section_keyword', 'SECTION_KEYWORD'),
+    ('cache', '_cache'),
+])
+def test_member_name_agrees_without_case_or_edge_underscores(
+        tmp_path: Path, label: str, declared: str) -> None:
+    '''
+    Test that a label agrees with a declared name that differs only in case or edge underscores.
+
+    :param tmp_path: The pytest temporary directory.
+    :type tmp_path: Path
+    :param label: The member name in the attribute label.
+    :type label: str
+    :param declared: The declared attribute name.
+    :type declared: str
+    '''
+
+    # The attribute label and declaration differ only by case or underscores.
+    source = _MEMBER_NAME_PROBE.replace(
+        '# * attribute: lang', f'# * attribute: {label}',
+    ).replace(
+        '    language: str = Field(',
+        f'    {declared}: str = Field(',
+    ).replace(
+        '# * method: fmt', '# * method: format',
+    )
+
+    # The normalized comparison reports no name mismatch.
+    codes = [item['error_code'] for item in check_source_findings(tmp_path, source)]
+    assert 'ATTRIBUTE_MEMBER_NAME_MISMATCH' not in codes
