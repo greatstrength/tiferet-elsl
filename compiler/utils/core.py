@@ -10,6 +10,7 @@ from typing import Any, Callable, ClassVar, Dict, FrozenSet, Iterator, List, Opt
 # ** app
 from ..mappers import (
     SYMBOL_KIND_CLASS_DEF,
+    SYMBOL_KIND_IMPORT,
     Declaration,
     ExprKind,
     Expression,
@@ -2272,6 +2273,7 @@ class RequiredBaseSpecification(Specification):
     Require a typed section's class to declare an acceptable base.
 
     When no required base is given, any declared base satisfies the rule.
+    With known bases, the base chain resolved in this module must reach one.
     A predicate that returns false skips the section.
     '''
 
@@ -2293,6 +2295,9 @@ class RequiredBaseSpecification(Specification):
     # * attribute: predicate
     predicate: Optional[Callable[..., bool]]
 
+    # * attribute: known_bases
+    known_bases: Optional[FrozenSet[str]]
+
     # * init
     def __init__(self, id: str, applies_to: str,
                  section_keyword: str,
@@ -2300,7 +2305,8 @@ class RequiredBaseSpecification(Specification):
                  message: str,
                  name_key: Optional[str] = None,
                  required_base: Optional[str] = None,
-                 predicate: Optional[Callable[..., bool]] = None) -> None:
+                 predicate: Optional[Callable[..., bool]] = None,
+                 known_bases: Optional[FrozenSet[str]] = None) -> None:
         '''
         Store the section keyword, the acceptable base, and the finding text.
 
@@ -2320,6 +2326,8 @@ class RequiredBaseSpecification(Specification):
         :type required_base: Optional[str]
         :param predicate: Optional skip predicate. False skips the rule.
         :type predicate: Optional[Callable[..., bool]]
+        :param known_bases: Optional base names the in-module base chain must reach.
+        :type known_bases: Optional[FrozenSet[str]]
         :return: None
         :rtype: None
         '''
@@ -2334,6 +2342,7 @@ class RequiredBaseSpecification(Specification):
         self.name_key = name_key
         self.required_base = required_base
         self.predicate = predicate
+        self.known_bases = known_bases
 
     # * method: evaluate
     def evaluate(self, candidate: Declaration,
@@ -2368,9 +2377,14 @@ class RequiredBaseSpecification(Specification):
         ):
             return []
 
-        # Any declared base satisfies when no specific base is required.
+        # Known bases require the in-module base chain to reach one of them.
         base = class_decl.type.subtype if class_decl.type else None
-        if self.required_base is None and base is not None:
+        if self.known_bases is not None:
+            if base is not None and self.reaches_known_base(base.name, context):
+                return []
+
+        # Any declared base satisfies when no specific base is required.
+        elif self.required_base is None and base is not None:
             return []
         if (
             self.required_base is not None
@@ -2393,6 +2407,48 @@ class RequiredBaseSpecification(Specification):
         if self.name_key is not None:
             finding[self.name_key] = header_decl.name
         return [finding]
+
+    # * method: reaches_known_base
+    # ++ todo: workaround until the Tiferet release carrying DomainObject root self-verification is identified (TBD: Tiferet RFP (domain root verification)); then replace this module-local walk with that verification.
+    def reaches_known_base(self, base_name: str, context: ConformanceContext) -> bool:
+        '''
+        Follow a base chain through this module's classes to a known base.
+
+        :param base_name: The first base name in the chain.
+        :type base_name: str
+        :param context: The conformance visit context.
+        :type context: ConformanceContext
+        :return: True when the chain reaches a known base or a sibling import.
+        :rtype: bool
+        '''
+
+        # Read the class and import symbols of this module only.
+        module_scope = context.scope_stack[0] if context.scope_stack else None
+        symbols = module_scope.symbols if module_scope is not None else {}
+
+        # Walk class symbols in this module. A repeated name is a cycle and fails.
+        seen = set()
+        current = base_name
+        while current and current not in seen:
+            if current in self.known_bases:
+                return True
+            seen.add(current)
+            symbol = symbols.get(current)
+            if symbol is None:
+                return False
+
+            # A same-package sibling import is trusted as a domain model.
+            if symbol.kind == SYMBOL_KIND_IMPORT:
+                source = symbol.source_module or ''
+                return source.startswith('.') and not source.startswith('..')
+
+            # A local class continues the chain through its own base.
+            if symbol.kind != SYMBOL_KIND_CLASS_DEF:
+                return False
+            current = symbol.type_annotation
+
+        # A missing base or a cycle does not reach a known base.
+        return False
 
 # ** class: event_section_specification
 class EventSectionSpecification(Specification):

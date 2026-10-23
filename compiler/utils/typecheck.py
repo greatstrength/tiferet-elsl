@@ -117,10 +117,11 @@ DOMAIN_RULE_SET: List[Specification] = [
         section_keyword='model',
         error_code='MODEL_MISSING_DOMAIN_OBJECT_BASE',
         message=(
-            "Model '{header_name}' class '{class_name}' declares no base class; "
-            "it must extend DomainObject"
+            "Model '{header_name}' class '{class_name}' must extend DomainObject, "
+            "directly or through a model in this module or a sibling module"
         ),
         name_key='model_name',
+        known_bases=frozenset({'DomainObject'}),
     ),
     DomainAttributeSpecification(
         id='domain.attribute',
