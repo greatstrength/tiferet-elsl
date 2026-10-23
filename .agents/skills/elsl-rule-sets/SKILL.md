@@ -42,7 +42,11 @@ A later dialect adds a constant list, not a `ConformanceChecker` subclass. New s
 - `BinaryOpTypeSpecification` `common.binary_op_expression` `expression`
 - `ReturnBinaryOpTypeSpecification` `common.binary_op_return` `return`
 
-`EVENT_RULE_SET`: `EventSectionSpecification` `event.section` `artifact_header`.
+`EVENT_RULE_SET`:
+
+- `EventSectionSpecification` `event.section` `artifact_header`
+- `PermittedGroupSpecification` `event.permitted_group` - `imports`, `constants`, `functions`, `classes`, `events`, `exports`. Error `DISALLOWED_EVENT_GROUP`.
+- `GroupSectionAgreementSpecification` `event.group_section_agreement`
 
 `DOMAIN_RULE_SET`:
 
