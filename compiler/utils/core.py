@@ -2800,6 +2800,7 @@ class GroupSectionAgreementSpecification(Specification):
         'models': 'model',
         'mappers': 'mapper',
         'blueprints': 'blueprint',
+        'events': 'event',
     }
 
     # * method: evaluate

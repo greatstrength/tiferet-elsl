@@ -12,10 +12,107 @@ from ...mappers.ast import (
     StatementAggregate,
     TypeAggregate,
 )
+from .parser_test_helpers import (
+    load_grammar_rules,
+    load_production_rules,
+    load_token_rules,
+)
+from ..lexer import TiferetLexer
+from ..parser import TiferetParser
 from ..semantic import SymbolTableBuilder
 from ...blueprints.core import build_cache
 from ...contexts.provision import COMPILER_PROVISION_CACHE_PREFIX
 from ..typecheck import ConformanceChecker
+
+# *** constants
+
+# ** constant: event_group_probe
+_EVENT_GROUP_PROBE = '''"""Events group probe"""
+
+# *** imports
+
+# ** app
+from .core import DomainEvent
+
+# *** models
+
+# ** event: probe_event
+class ProbeEvent(DomainEvent):
+    \'\'\'
+    A probe event.
+    \'\'\'
+
+    # * method: execute
+    def execute(self, id: str, **kwargs) -> str:
+        \'\'\'
+        Return the id.
+
+        :param id: The id.
+        :type id: str
+        :return: The id.
+        :rtype: str
+        \'\'\'
+
+        # Return the id.
+        return id
+'''
+
+# ** constant: helper_function_section
+_HELPER_FUNCTION_SECTION = '''# ** function: helper
+def helper() -> str:
+    \'\'\'
+    Return a value.
+
+    :return: The value.
+    :rtype: str
+    \'\'\'
+
+    # Return the value.
+    return 'value'
+
+'''
+
+# *** classes
+
+# ** class: _parser_harness
+class _ParserHarness:
+    '''
+    Load the declared catalogues and parse source text.
+    '''
+
+    # * init
+    def __init__(self) -> None:
+        '''
+        Load the declared token, grammar, and production catalogues.
+        '''
+
+        # Catalogues stay on the harness. The adapter does not read them itself.
+        self.tokens = load_token_rules()
+        self.grammars = load_grammar_rules()
+        self.productions = load_production_rules()
+        self._parser = TiferetParser()
+
+    # * method: parse_source
+    def parse_source(self, source: str):
+        '''
+        Tokenize source text and parse it to a module AST.
+
+        :param source: The module source text.
+        :type source: str
+        :return: The root module AST.
+        :rtype: Any
+        '''
+
+        # Layout injection stays in the lexer. The parser receives tokens only.
+        tokens = TiferetLexer().tokenize(source, self.tokens, self.grammars)
+        return self._parser.parse(
+            'probe',
+            tokens,
+            self.grammars,
+            self.tokens,
+            self.productions,
+            source_text=source,
+        )
 
 # *** functions
 
@@ -167,6 +264,46 @@ def check_event(module: DeclarationAggregate) -> list:
         COMPILER_PROVISION_CACHE_PREFIX,
     ).check(module)
 
+# ** function: _parser
+def _parser() -> _ParserHarness:
+    '''
+    Return one harness for the module.
+
+    :return: The parser harness.
+    :rtype: _ParserHarness
+    '''
+
+    # Catalogues are loaded once. Each parse still gets a fresh token stream.
+    if not hasattr(_parser, 'harness'):
+        _parser.harness = _ParserHarness()
+    return _parser.harness
+
+# ** function: check_event_source
+def check_event_source(source: str) -> list:
+    '''
+    Parse source text and check it with the common and event rule sets.
+
+    :param source: The module source text.
+    :type source: str
+    :return: Finding dicts, common first, then event.
+    :rtype: list
+    '''
+
+    # The semantic pipeline runs the common selector before the event one.
+    module = _parser().parse_source(source)
+    cache = _provision_cache()
+    builder = SymbolTableBuilder(cache, COMPILER_PROVISION_CACHE_PREFIX)
+    builder.build(module)
+    findings = []
+    for selector in ('common.', 'event.'):
+        findings.extend(ConformanceChecker(
+            builder.scopes,
+            cache,
+            selector,
+            COMPILER_PROVISION_CACHE_PREFIX,
+        ).check(module))
+    return findings
+
 # *** tests
 
 # ** test: event_section_satisfied_when_execute_present
@@ -223,18 +360,84 @@ def test_event_section_ignored_for_non_event_keyword() -> None:
     # The event rule does not judge other keywords.
     assert check_event(module) == []
 
-# ** test: event_rule_set_is_exactly_event_section
-def test_event_rule_set_is_exactly_event_section() -> None:
+# ** test: event_rule_set_rows
+def test_event_rule_set_rows() -> None:
     '''
-    Test that the event rule set is the single event section specification.
+    Test that the event rule set is the event section, permitted group, and agreement rows.
     '''
 
-    # The event selector attaches one specification. It is not a checker subclass.
+    # The event selector attaches three specifications. It is not a checker subclass.
     checker = ConformanceChecker(
         {},
         _provision_cache(),
         'event.',
         COMPILER_PROVISION_CACHE_PREFIX,
     )
-    assert len(checker.provisions) == 1
-    assert checker.provisions[0].id == 'event.section'
+    assert [provision.id for provision in checker.provisions] == [
+        'event.section',
+        'event.permitted_group',
+        'event.group_section_agreement',
+    ]
+
+# ** test: event_permitted_group_violated_for_widgets
+def test_event_permitted_group_violated_for_widgets() -> None:
+    '''
+    Test that a widgets group yields one DISALLOWED_EVENT_GROUP at the group line.
+    '''
+
+    # widgets is not a permitted events group.
+    source = _EVENT_GROUP_PROBE.replace('# *** models', '# *** widgets')
+    findings = check_event_source(source)
+
+    # The disallowed group is the only finding, with the shared message template.
+    assert [(item['error_code'], item['lineno']) for item in findings] == [
+        ('DISALLOWED_EVENT_GROUP', 8),
+    ]
+    assert findings[0]['message'] == (
+        "Group 'widgets' is not permitted in an events module. "
+        'Permitted groups are: classes, constants, events, exports, functions, imports.'
+    )
+
+# ** test: event_permitted_group_violated_for_models
+def test_event_permitted_group_violated_for_models() -> None:
+    '''
+    Test that a models group yields DISALLOWED_EVENT_GROUP at the group line.
+    '''
+
+    # models is not permitted. It also expects model sections, so agreement may fire too.
+    findings = check_event_source(_EVENT_GROUP_PROBE)
+
+    # The disallowed group is reported at the group line.
+    assert ('DISALLOWED_EVENT_GROUP', 8) in [
+        (item['error_code'], item['lineno']) for item in findings
+    ]
+
+# ** test: event_group_section_agreement_violated_for_function_section
+def test_event_group_section_agreement_violated_for_function_section() -> None:
+    '''
+    Test that a function section under the events group yields SECTION_GROUP_MISMATCH.
+    '''
+
+    # A helper function section sits under events next to the event section.
+    source = _EVENT_GROUP_PROBE.replace('# *** models', '# *** events').replace(
+        '# ** event: probe_event',
+        _HELPER_FUNCTION_SECTION + '# ** event: probe_event',
+    )
+    findings = check_event_source(source)
+
+    # The function section is the only mismatch.
+    assert [item['error_code'] for item in findings] == ['SECTION_GROUP_MISMATCH']
+    assert findings[0]['expected_keyword'] == 'event'
+    assert findings[0]['actual_keyword'] == 'function'
+
+# ** test: event_groups_satisfied_for_events_group
+def test_event_groups_satisfied_for_events_group() -> None:
+    '''
+    Test that the probe under the events group yields no findings.
+    '''
+
+    # events is permitted, and its section is an event section.
+    source = _EVENT_GROUP_PROBE.replace('# *** models', '# *** events')
+
+    # No rule fires.
+    assert check_event_source(source) == []

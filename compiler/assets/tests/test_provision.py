@@ -167,6 +167,33 @@ _ROWS = (
         {},
     ),
     (
+        'event.permitted_group',
+        'specification',
+        'compiler.utils.core',
+        'PermittedGroupSpecification',
+        'artifact_header',
+        {
+            'permitted_groups': [
+                'imports',
+                'constants',
+                'functions',
+                'classes',
+                'events',
+                'exports',
+            ],
+            'error_code': 'DISALLOWED_EVENT_GROUP',
+            'module_label': 'an events module',
+        },
+    ),
+    (
+        'event.group_section_agreement',
+        'specification',
+        'compiler.utils.core',
+        'GroupSectionAgreementSpecification',
+        'artifact_header',
+        {},
+    ),
+    (
         'domain.permitted_group',
         'specification',
         'compiler.utils.core',
@@ -701,12 +728,12 @@ _ROWS = (
 # ** test: compiler_default_provisions_match_inventory
 def test_compiler_default_provisions_match_inventory() -> None:
     '''
-    Test that the catalog is the 52 employed rows, in list order.
+    Test that the catalog is the 54 employed rows, in list order.
     '''
 
     # Insertion order is the inventory order, not a sorted order.
     assert list(COMPILER_DEFAULT_PROVISIONS) == [row[0] for row in _ROWS]
-    assert len(COMPILER_DEFAULT_PROVISIONS) == 52
+    assert len(COMPILER_DEFAULT_PROVISIONS) == 54
 
     # Each value is the five registration fields. The id stays the key.
     for key, kind, module_path, class_name, applies_to, parameters in _ROWS:
