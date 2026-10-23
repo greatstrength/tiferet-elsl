@@ -71,7 +71,7 @@ class OptimizeCode(DomainEvent):
     '''
     Apply an optimization level to a codegen dict.
 
-    O0 leaves the dict unchanged. O1 and above delegate to the injected optimizer.
+    O0 leaves the dict unchanged. O1 delegates to the injected optimizer. Any other level is rejected.
     '''
 
     # * attribute: optimizer_service
@@ -97,7 +97,7 @@ class OptimizeCode(DomainEvent):
             **kwargs,
         ) -> Dict[str, Any]:
         '''
-        Optimize a codegen dict when the requested level is O1 or above.
+        Optimize a codegen dict when the requested level is O1.
 
         :param codegen: The codegen dict from generation.
         :type codegen: Dict[str, Any]
@@ -110,18 +110,22 @@ class OptimizeCode(DomainEvent):
         '''
 
         # Normalize a blank request to O0.
-        level = O.strip().upper() if O else 'O0'
+        level = O.strip() if O else 'O0'
+
+        # Reject any level other than the documented O0 and O1.
+        self.verify(
+            expression=level in ('O0', 'O1'),
+            error_code='INVALID_OPTIMIZATION_LEVEL',
+            message=f'Unsupported optimization level: {level}. Expected O0 or O1.',
+            level=level,
+        )
 
         # O0 leaves the dict unchanged and does not call the optimizer.
         if level == 'O0':
             return codegen
 
-        # O1 and above share repeated structures through the optimizer.
-        if level >= 'O1':
-            codegen = self.optimizer_service.optimize(codegen)
-
-        # Return the possibly optimized dict.
-        return codegen
+        # O1 shares repeated structures through the optimizer.
+        return self.optimizer_service.optimize(codegen)
 
 # ** event: emit_codegen_result
 class EmitCodegenResult(DomainEvent):

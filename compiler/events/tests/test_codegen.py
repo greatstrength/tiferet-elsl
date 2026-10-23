@@ -286,6 +286,39 @@ def test_optimize_code_missing_codegen(
     assert 'codegen' in exc_info.value.kwargs.get('parameters', [])
     mock_optimizer_service.optimize.assert_not_called()
 
+# ** test: optimize_code_rejects_unknown_level
+def test_optimize_code_rejects_unknown_level(
+        mock_optimizer_service: Mock,
+        sample_codegen: dict,
+    ) -> None:
+    '''
+    Test that any level other than O0 and O1 raises a structured error without optimizing.
+
+    :param mock_optimizer_service: The optimizer service mock.
+    :type mock_optimizer_service: Mock
+    :param sample_codegen: The codegen dict to optimize.
+    :type sample_codegen: dict
+    '''
+
+    # Each undocumented level, including a lower-case o1, is rejected by exact comparison.
+    for level in ('X', 'A', 'O2', 'o1'):
+        with pytest.raises(TiferetError) as exc_info:
+            DomainEvent.handle(
+                OptimizeCode,
+                dependencies={
+                    'optimizer_service': mock_optimizer_service,
+                },
+                codegen=sample_codegen,
+                O=level,
+            )
+
+        # The error names the rejected level.
+        assert exc_info.value.error_code == 'INVALID_OPTIMIZATION_LEVEL'
+        assert exc_info.value.kwargs['level'] == level
+
+    # No rejected level reaches the optimizer.
+    mock_optimizer_service.optimize.assert_not_called()
+
 # ** test: emit_codegen_result_returns_dict
 def test_emit_codegen_result_returns_dict(
         sample_codegen: dict,

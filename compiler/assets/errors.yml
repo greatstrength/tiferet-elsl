@@ -89,3 +89,8 @@ errors:
     message:
       - lang: en_US
         text: "Event '{event_name}' class '{class_name}' must declare an 'execute' method"
+  INVALID_OPTIMIZATION_LEVEL:
+    name: Invalid Optimization Level
+    message:
+      - lang: en_US
+        text: "Unsupported optimization level: {level}. Expected O0 or O1."
