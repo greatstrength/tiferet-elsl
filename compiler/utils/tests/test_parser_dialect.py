@@ -69,6 +69,7 @@ _SHORTHANDS = (
     '$apply_annotations',
     '$parse_member_kind',
     '$parse_member_qualifier',
+    '$parse_member_name',
     '$get_attribute_type',
     '$render_lambda_body',
     '$attach_dangling_else',
@@ -1481,17 +1482,17 @@ _ORDERED_PRODUCTIONS = (
     (
         'member_decl',
         'member : ARTIFACT_MEMBER NEWLINE member_body',
-        'kind = $parse_member_kind(p[1])\nqualifier = $parse_member_qualifier(p[1])\nln, col = $pos(p, 1)\np[0] = $artifact_decl.new_member_decl(kind, p[3], qualifier=qualifier, lineno=ln, col=col)',
+        'kind = $parse_member_kind(p[1])\nqualifier = $parse_member_qualifier(p[1])\nname = $parse_member_name(p[1])\nln, col = $pos(p, 1)\np[0] = $artifact_decl.new_member_decl(kind, p[3], qualifier=qualifier, member_name=name, lineno=ln, col=col)',
     ),
     (
         'member_annotated',
         'member : annots ARTIFACT_MEMBER NEWLINE member_body',
-        'kind = $parse_member_kind(p[2])\nqualifier = $parse_member_qualifier(p[2])\nln, col = $pos(p, 2)\np[0] = $artifact_decl.new_member_decl(kind, p[4], annots=p[1], qualifier=qualifier, lineno=ln, col=col)\n$apply_annotations(p[0], p[1])',
+        'kind = $parse_member_kind(p[2])\nqualifier = $parse_member_qualifier(p[2])\nname = $parse_member_name(p[2])\nln, col = $pos(p, 2)\np[0] = $artifact_decl.new_member_decl(kind, p[4], annots=p[1], qualifier=qualifier, member_name=name, lineno=ln, col=col)\n$apply_annotations(p[0], p[1])',
     ),
     (
         'member_post_annotated',
         'member : ARTIFACT_MEMBER NEWLINE annots member_body',
-        'kind = $parse_member_kind(p[1])\nqualifier = $parse_member_qualifier(p[1])\nln, col = $pos(p, 1)\np[0] = $artifact_decl.new_member_decl(kind, p[4], annots=p[3], qualifier=qualifier, lineno=ln, col=col)\n$apply_annotations(p[0], p[3])',
+        'kind = $parse_member_kind(p[1])\nqualifier = $parse_member_qualifier(p[1])\nname = $parse_member_name(p[1])\nln, col = $pos(p, 1)\np[0] = $artifact_decl.new_member_decl(kind, p[4], annots=p[3], qualifier=qualifier, member_name=name, lineno=ln, col=col)\n$apply_annotations(p[0], p[3])',
     ),
     (
         'member_body_single',

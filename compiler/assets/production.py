@@ -1379,17 +1379,17 @@ COMPILER_DEFAULT_PRODUCTIONS = {
     'member_decl': {
         'grammar_id': TIFERET_DIALECT_ID,
         'spec': 'member : ARTIFACT_MEMBER NEWLINE member_body',
-        'action': 'kind = $parse_member_kind(p[1])\nqualifier = $parse_member_qualifier(p[1])\nln, col = $pos(p, 1)\np[0] = $artifact_decl.new_member_decl(kind, p[3], qualifier=qualifier, lineno=ln, col=col)\n',
+        'action': 'kind = $parse_member_kind(p[1])\nqualifier = $parse_member_qualifier(p[1])\nname = $parse_member_name(p[1])\nln, col = $pos(p, 1)\np[0] = $artifact_decl.new_member_decl(kind, p[3], qualifier=qualifier, member_name=name, lineno=ln, col=col)\n',
     },
     'member_annotated': {
         'grammar_id': TIFERET_DIALECT_ID,
         'spec': 'member : annots ARTIFACT_MEMBER NEWLINE member_body',
-        'action': 'kind = $parse_member_kind(p[2])\nqualifier = $parse_member_qualifier(p[2])\nln, col = $pos(p, 2)\np[0] = $artifact_decl.new_member_decl(kind, p[4], annots=p[1], qualifier=qualifier, lineno=ln, col=col)\n$apply_annotations(p[0], p[1])\n',
+        'action': 'kind = $parse_member_kind(p[2])\nqualifier = $parse_member_qualifier(p[2])\nname = $parse_member_name(p[2])\nln, col = $pos(p, 2)\np[0] = $artifact_decl.new_member_decl(kind, p[4], annots=p[1], qualifier=qualifier, member_name=name, lineno=ln, col=col)\n$apply_annotations(p[0], p[1])\n',
     },
     'member_post_annotated': {
         'grammar_id': TIFERET_DIALECT_ID,
         'spec': 'member : ARTIFACT_MEMBER NEWLINE annots member_body',
-        'action': 'kind = $parse_member_kind(p[1])\nqualifier = $parse_member_qualifier(p[1])\nln, col = $pos(p, 1)\np[0] = $artifact_decl.new_member_decl(kind, p[4], annots=p[3], qualifier=qualifier, lineno=ln, col=col)\n$apply_annotations(p[0], p[3])\n',
+        'action': 'kind = $parse_member_kind(p[1])\nqualifier = $parse_member_qualifier(p[1])\nname = $parse_member_name(p[1])\nln, col = $pos(p, 1)\np[0] = $artifact_decl.new_member_decl(kind, p[4], annots=p[3], qualifier=qualifier, member_name=name, lineno=ln, col=col)\n$apply_annotations(p[0], p[3])\n',
     },
     'member_body_single': {
         'grammar_id': TIFERET_DIALECT_ID,

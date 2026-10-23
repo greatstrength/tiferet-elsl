@@ -39,6 +39,15 @@ class ArtifactDeclaration(Declaration):
         description='Parenthetical qualifier (ids in constants (ids)); None if unqualified.',
     )
 
+    # * attribute: artifact_member_name
+    artifact_member_name: Optional[str] = Field(
+        None,
+        description=(
+            "Member name from '# * method: <name>' or '# * attribute: <name>'; "
+            'None for init and for a label with no colon.'
+        ),
+    )
+
     # * attribute: annotations
     annotations: Optional[List[dict]] = Field(
         None,
