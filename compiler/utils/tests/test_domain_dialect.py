@@ -462,18 +462,103 @@ def test_domain_app_import_satisfied_for_assets_reference() -> None:
     # The assets path is satisfactory.
     assert _codes(module) == []
 
-# ** test: domain_model_base_class_satisfied_for_any_base
-def test_domain_model_base_class_satisfied_for_any_base() -> None:
+# ** test: domain_model_base_class_violated_for_unresolved_base
+def test_domain_model_base_class_violated_for_unresolved_base() -> None:
     '''
-    Test that a model class with any base yields no missing-base finding.
+    Test that a model class whose base does not resolve yields MODEL_MISSING_DOMAIN_OBJECT_BASE.
     '''
 
-    # Any declared base satisfies. DomainObject is not required by name.
+    # Other is neither DomainObject, a class in this module, nor a sibling import.
     module = _module([
         _model('ping', [], base='Other'),
     ])
 
-    # A present base is satisfactory.
+    # The unresolved base is the only finding.
+    assert _codes(module) == ['MODEL_MISSING_DOMAIN_OBJECT_BASE']
+
+# ** test: domain_model_base_class_satisfied_for_local_chain
+def test_domain_model_base_class_satisfied_for_local_chain() -> None:
+    '''
+    Test that a model class reaching DomainObject through a local model yields no missing-base finding.
+    '''
+
+    # A class with an empty body is not registered, so each class carries an id attribute.
+    id_member = _member('attribute', [
+        _decl(_attr('id', type_name='str', value=_field(description='The identifier.'))),
+    ])
+
+    # SimpleToken extends Token, and Token extends DomainObject, in one models group.
+    module = _module([
+        _group('models', [
+            _section('** model', 'token', [
+                _decl(_class('Token', [id_member], base='DomainObject')),
+            ]),
+            _section('** model', 'simple_token', [
+                _decl(_class('SimpleToken', [id_member], base='Token')),
+            ]),
+        ]),
+    ])
+
+    # The local chain reaches DomainObject.
+    assert 'MODEL_MISSING_DOMAIN_OBJECT_BASE' not in _codes(module)
+
+# ** test: domain_model_base_class_violated_for_local_chain_to_other_root
+def test_domain_model_base_class_violated_for_local_chain_to_other_root() -> None:
+    '''
+    Test that a local base chain ending at another root yields a finding for each model.
+    '''
+
+    # A class with an empty body is not registered, so each class carries an id attribute.
+    id_member = _member('attribute', [
+        _decl(_attr('id', type_name='str', value=_field(description='The identifier.'))),
+    ])
+
+    # Child extends Base, and Base extends BaseModel, not DomainObject.
+    module = _module([
+        _group('models', [
+            _section('** model', 'base', [
+                _decl(_class('Base', [id_member], base='BaseModel')),
+            ]),
+            _section('** model', 'child', [
+                _decl(_class('Child', [id_member], base='Base')),
+            ]),
+        ]),
+    ])
+    findings = check_domain(module)
+
+    # Both models are reported, in walk order.
+    assert [
+        item['model_name']
+        for item in findings
+        if item['error_code'] == 'MODEL_MISSING_DOMAIN_OBJECT_BASE'
+    ] == ['base', 'child']
+
+# ** test: domain_model_base_class_satisfied_for_sibling_import
+def test_domain_model_base_class_satisfied_for_sibling_import() -> None:
+    '''
+    Test that a model class extending a same-package sibling import yields no missing-base finding.
+    '''
+
+    # A class with an empty body is not registered, so the class carries an id attribute.
+    id_member = _member('attribute', [
+        _decl(_attr('id', type_name='str', value=_field(description='The identifier.'))),
+    ])
+
+    # ServiceDependency is imported from the sibling core module.
+    module = _module([
+        _group('imports', [
+            _import_section('app', [
+                _import_from('.core', 'ServiceDependency'),
+            ]),
+        ]),
+        _group('models', [
+            _section('** model', 'flagged_dependency', [
+                _decl(_class('FlaggedDependency', [id_member], base='ServiceDependency')),
+            ]),
+        ]),
+    ])
+
+    # The sibling import is trusted as a domain model.
     assert 'MODEL_MISSING_DOMAIN_OBJECT_BASE' not in _codes(module)
 
 # ** test: domain_model_base_class_violated_for_no_base
