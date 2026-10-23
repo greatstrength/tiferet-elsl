@@ -324,9 +324,19 @@ _ORDERED_PRODUCTIONS = (
         'p[0] = $expr.new_args_list_expr(p[1])',
     ),
     (
+        'decorator_args_empty',
+        'decorator_args :',
+        'p[0] = None',
+    ),
+    (
         'decorator_args_multi',
         'decorator_args : decorator_args COMMA decorator_arg',
         'p[0] = $expr.new_args_list_expr(p[1], p[3])',
+    ),
+    (
+        'decorator_args_trailing_comma',
+        'decorator_args : decorator_args COMMA',
+        'p[0] = p[1]',
     ),
     (
         'decorator_arg_literal',
@@ -1339,6 +1349,11 @@ _ORDERED_PRODUCTIONS = (
         "ln, col = p[1].lineno or 0, p[1].col or 0\nimplicit_header = $artifact_decl.new_artifact_decl('core', '**', lineno=ln, col=col)\nimplicit_section = $artifact_stmt.new_artifact_stmt(implicit_header, p[3])\np[0] = $artifact_stmt.new_artifact_stmt(p[1], implicit_section)",
     ),
     (
+        'group_with_bare_block',
+        'group : group_header NEWLINE const_block section_list',
+        'p[0] = $artifact_stmt.new_artifact_stmt(p[1], [$stmt.new_decl_stmt(d) for d in p[3]] + p[4])',
+    ),
+    (
         'group_header_start',
         'group_header : ARTIFACT_START',
         'name, qualifier, type = $parse_artifact_header(p[1])\nln, col = $pos(p, 1)\np[0] = $artifact_decl.new_artifact_decl(name, type, qualifier=qualifier, lineno=ln, col=col)',
@@ -1584,13 +1599,13 @@ def rewrite_table() -> dict:
 # ** test: production_catalogue_count
 def test_production_catalogue_count() -> None:
     '''
-    Test that production_rules has 285 items.
+    Test that production_rules has 288 items.
     '''
 
     # The document has one top-level list of the declared length.
     document = load_document()
     assert list(document) == ['production_rules']
-    assert len(document['production_rules']) == 285
+    assert len(document['production_rules']) == 288
 
 # ** test: production_catalogue_identifiers
 def test_production_catalogue_identifiers() -> None:
@@ -2747,3 +2762,87 @@ def test_member_see_stacks_with_todo(parser) -> None:
     # Both notes are stored, and the SEE still sets the guide path.
     assert [annot['kind'] for annot in member.annotations] == ['TODO', 'SEE']
     assert member.guide_path == '@guides/domain/error.md#error'
+
+# ** test: test_parse_decorator_trailing_comma
+def test_parse_decorator_trailing_comma(parser) -> None:
+    '''
+    Test a decorator call with a trailing comma, on one line and across lines.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The same tester is written with one-line and multi-line arguments.
+    sources = [
+        (
+            '# *** testers\n'
+            '# ** tester: sample\n'
+            "@use_tester(type='aggregate', target_cls=X,)\n"
+            'class TestSample:\n'
+            '    """Marker."""\n'
+            '    pass\n'
+        ),
+        (
+            '# *** testers\n'
+            '# ** tester: sample\n'
+            '@use_tester(\n'
+            "    type='aggregate',\n"
+            '    target_cls=X,\n'
+            ')\n'
+            'class TestSample:\n'
+            '    """Marker."""\n'
+            '    pass\n'
+        ),
+    ]
+
+    # Both forms parse into the testers group and the sample section.
+    for source in sources:
+        module = _parse(parser, source)
+        assert get_group(module).decl.name == 'testers'
+        assert get_section(module).decl.name == 'sample'
+
+# ** test: test_parse_decorator_empty_args
+def test_parse_decorator_empty_args(parser) -> None:
+    '''
+    Test a decorator call with no arguments.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The decorator call has an empty argument list.
+    source = (
+        '# *** testers\n'
+        '# ** tester: sample\n'
+        '@use_tester()\n'
+        'class TestSample:\n'
+        '    """Marker."""\n'
+        '    pass\n'
+    )
+    module = _parse(parser, source)
+
+    # The section still parses under its declared name.
+    assert get_section(module).decl.name == 'sample'
+
+# ** test: test_parse_group_bare_block
+def test_parse_group_bare_block(parser) -> None:
+    '''
+    Test a group body that opens with a bare assignment block.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # The exports assignment comes before the first section.
+    source = (
+        '# *** exports\n'
+        "__all__ = ['A', 'B',]\n"
+        '# ** app\n'
+        'from .core import A, B\n'
+    )
+    group = get_group(_parse(parser, source))
+
+    # The assignment is a declaration ahead of the app section.
+    assert group.decl.name == 'exports'
+    assert group.body[0].decl.name == '__all__'
+    assert group.body[1].decl.name == 'app'

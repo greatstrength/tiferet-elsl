@@ -283,11 +283,23 @@ production_rules:
       action: |
         p[0] = $expr.new_args_list_expr(p[1])
 
+  - decorator_args_empty:
+      grammar_id: tiferet_dialect
+      spec: "decorator_args :"
+      action: |
+        p[0] = None
+
   - decorator_args_multi:
       grammar_id: tiferet_dialect
       spec: "decorator_args : decorator_args COMMA decorator_arg"
       action: |
         p[0] = $expr.new_args_list_expr(p[1], p[3])
+
+  - decorator_args_trailing_comma:
+      grammar_id: tiferet_dialect
+      spec: "decorator_args : decorator_args COMMA"
+      action: |
+        p[0] = p[1]
 
   - decorator_arg_literal:
       grammar_id: tiferet_dialect
@@ -1642,6 +1654,12 @@ production_rules:
         implicit_header = $artifact_decl.new_artifact_decl('core', '**', lineno=ln, col=col)
         implicit_section = $artifact_stmt.new_artifact_stmt(implicit_header, p[3])
         p[0] = $artifact_stmt.new_artifact_stmt(p[1], implicit_section)
+
+  - group_with_bare_block:
+      grammar_id: tiferet_dialect
+      spec: "group : group_header NEWLINE const_block section_list"
+      action: |
+        p[0] = $artifact_stmt.new_artifact_stmt(p[1], [$stmt.new_decl_stmt(d) for d in p[3]] + p[4])
 
   - group_header_start:
       grammar_id: tiferet_dialect
