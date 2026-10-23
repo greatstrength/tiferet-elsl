@@ -7,12 +7,14 @@ import re
 from typing import Any, Callable, List, Optional, Tuple
 
 # ** infra
+from tiferet.interfaces.core import ServiceError
 from tiferet_ly.domain.grammar import Grammar
 from tiferet_ly.domain.production import ProductionRule
 from tiferet_ly.domain.token import TokenRule
 from tiferet_ly.utils.parse import PlyParser as LyPlyParser
 
 # ** app
+from .. import assets as a
 from ..interfaces import ParserService
 from ..mappers import (
     ArtifactDecl,
@@ -31,6 +33,9 @@ from ..mappers.ast import ExprKind, TypeKind
 
 # ** constant: grammar_id
 GRAMMAR_ID = 'tiferet_dialect'
+
+# ** constant: parse_error_id
+PARSE_ERROR_ID = 'PARSE_ERROR'
 
 # *** functions
 
@@ -366,6 +371,51 @@ def make_position_helpers(
         get_last_ident_pos,
     )
 
+# ** function: end_of_input_position
+def end_of_input_position(lexemes: List[Any]) -> dict:
+    '''
+    Return the position keys for a parse error raised at end of input.
+
+    The last real lexeme is the last one that is not an indent, a dedent, or
+    a newline. Open blocks are indents that no dedent closed.
+
+    :param lexemes: The lexeme stream the parser received.
+    :type lexemes: List[Any]
+    :return: ``at_end``, the last real lexeme's type, value, line and offset, and the open-block keys when a block is open.
+    :rtype: dict
+    '''
+
+    # Take the position from the last real lexeme, or the start of an empty stream.
+    layout_types = (a.lexer.INDENT, a.lexer.DEDENT, a.lexer.NEWLINE)
+    real = [lexeme for lexeme in lexemes if lexeme.type not in layout_types]
+    position = {'at_end': True}
+    if real:
+        last = real[-1]
+        position.update(
+            type=last.type,
+            value=last.value,
+            lineno=last.lineno,
+            lexpos=last.lexpos,
+        )
+    else:
+        position.update(lineno=1, lexpos=0)
+
+    # Pair each dedent with the innermost open indent.
+    open_lines = []
+    for lexeme in lexemes:
+        if lexeme.type == a.lexer.INDENT:
+            open_lines.append(lexeme.lineno)
+        elif lexeme.type == a.lexer.DEDENT and open_lines:
+            open_lines.pop()
+
+    # Name the innermost block that never closed.
+    if open_lines:
+        position.update(
+            open_blocks=len(open_lines),
+            open_block_lineno=open_lines[-1],
+        )
+    return position
+
 # *** utils
 
 # ** util: ply_parser
@@ -509,11 +559,26 @@ class TiferetParser(ParserService):
         }
 
         # Delegate to the published parser. This class hosts no p_* productions.
-        return PlyParser().parse(
-            GRAMMAR_ID,
-            grammars,
-            token_rules,
-            production_rules,
-            lexemes=lexemes,
-            rewrites=rewrites,
-        )
+        try:
+            return PlyParser().parse(
+                GRAMMAR_ID,
+                grammars,
+                token_rules,
+                production_rules,
+                lexemes=lexemes,
+                rewrites=rewrites,
+            )
+
+        # An end-of-input parse error has no token, so add the position from the lexemes.
+        except ServiceError as error:
+            if error.error_code != PARSE_ERROR_ID or 'lineno' in error.kwargs:
+                raise
+            raise ServiceError(
+                error.error_code,
+                message=error.message,
+                module_path=error.module_path,
+                class_name=error.class_name,
+                target_method=error.target_method,
+                **error.kwargs,
+                **end_of_input_position(lexemes),
+            ) from error
