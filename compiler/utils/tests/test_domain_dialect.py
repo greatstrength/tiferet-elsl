@@ -403,7 +403,6 @@ def _codes(module) -> list:
     # Codes are enough when the test does not cite a finding key.
     return [item['error_code'] for item in check_domain(module)]
 
-
 # ** function: check_source_findings
 def check_source_findings(tmp_path: Path, source: str) -> list:
     '''
@@ -751,6 +750,29 @@ def test_member_name_satisfied_for_matching_labels(tmp_path: Path) -> None:
 
     # No rule fires.
     assert check_source_findings(tmp_path, source) == []
+
+# ** test: member_name_kept_for_post_annotated_method
+def test_member_name_kept_for_post_annotated_method(tmp_path: Path) -> None:
+    '''
+    Test that a see annotation after the method label keeps the captured member name.
+
+    :param tmp_path: The pytest temporary directory.
+    :type tmp_path: Path
+    '''
+
+    # The see note follows the fmt label, so member_post_annotated builds the member.
+    source = _MEMBER_NAME_PROBE.replace(
+        '# * attribute: lang', '# * attribute: language',
+    ).replace(
+        '    # * method: fmt\n',
+        '    # * method: fmt\n    # >> see: x\n',
+    )
+    findings = check_source_findings(tmp_path, source)
+
+    # The method rule fires once, on the fmt label line.
+    assert [(item['error_code'], item['lineno']) for item in findings] == [
+        ('METHOD_MEMBER_NAME_MISMATCH', 22),
+    ]
 
 # ** test: member_name_compared_with_def_for_decorated_method
 @pytest.mark.parametrize('label, expected', [
