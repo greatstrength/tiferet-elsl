@@ -40,7 +40,7 @@ The generic parse engine is `tiferet-ly`. This package does not absorb it. The b
 
 ## Pipelines
 
-Five pipelines, declared in `compiler/assets/feature.yml` and exposed by `compiler/assets/cli.yml`:
+Five pipelines, catalogued in `compiler/assets/feature.py` (`COMPILER_DEFAULT_FEATURES`) and exposed by `compiler/assets/cli.py`:
 
 - `scan.module`
 - `parse.module`
@@ -67,7 +67,7 @@ Five local skills, `elsl-` prefix, live under `.agents/skills/`. Each carries it
 
 - `elsl-language` — the ElohaSL document `compile` emits. Read this before explaining `cmpt`, `evt_grp`, or an encoded statement.
 - `elsl-pipeline` — a phase, a feature step, a CLI command, or a pipeline-step event.
-- `elsl-conformance` — a conformance event, or the `feature.yml` condition that gates it.
+- `elsl-conformance` - a conformance event, or the component gate that selects it.
 - `elsl-rule-sets` — a specification on a `*_RULE_SET` constant.
 - `elsl-schema` — any change that could move a frozen surface.
 
@@ -76,7 +76,7 @@ Dialect files, not a transcription of the rulebooks:
 - Rule-set constants live in `compiler/utils/typecheck.py`.
 - Specifications live in `compiler/utils/core.py`.
 - Gated conformance events live in `compiler/events/typecheck.py`.
-- The gate is `compiler/assets/feature.yml`, not `execute`. `execute` does not read `component`.
+- The gate is `DIALECT_SERVICE_ID` in `compiler/contexts/feature.py`, not `execute`. `execute` does not read `component`.
 
 ## Frozen surfaces
 
