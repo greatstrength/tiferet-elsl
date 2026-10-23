@@ -1,6 +1,6 @@
 # Domain Vision Statement — ElohaSL
 
-**Status:** Draft · **Domain:** `compiler` · **Code:** `tiferet_elsl/` (intended; not seeded) · **Branch:** `main`
+**Status:** Draft · **Domain:** `compiler` · **Code:** `compiler/` (distribution `tiferet-elsl` 1.0.1, BSD-3-Clause, on PyPI; console script `tiferet-compiler`) · **Branch:** `main`
 
 ## The bet
 
@@ -34,6 +34,9 @@ it claims to be, and hands the design on as organized data. That data is
 ElohaSL itself: the result another tool may store, compare, or render.
 That tool is not part of this compiler, and this compiler does not depend
 on it.
+
+ElSL's first principle is that it checks one module at a time. A package or
+an application as a whole is beyond its scope.
 
 ## What we get for it
 

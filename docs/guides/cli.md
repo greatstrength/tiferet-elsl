@@ -27,7 +27,9 @@ tiferet-compiler scan -h
 tiferet-compiler scan module -h
 ```
 
-`python -m compiler` is the same entry. `compiler.py` at the repository root only calls `compiler.cli.main`.
+`tiferet-compiler` is the only console script in 1.0.1 (`pyproject.toml` `[project.scripts]`). `python -m compiler` does not work: there is no `compiler/__main__.py`, so it exits `1` with "No module named compiler.__main__". From the repository root, `python compiler.py` calls the same `compiler.cli.main`.
+
+> **Pending rename:** the maintainer has ruled that the entry point becomes `tiferet-elsl`, with a matching `python -m` entry. That is prototype work, not a trunk hotfix. Until a release ships it, use `tiferet-compiler`.
 
 Argparse failures exit `2`. A structured API error exits `1`.
 

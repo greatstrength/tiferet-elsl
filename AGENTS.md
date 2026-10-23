@@ -107,9 +107,9 @@ Before an implementation session, scan open annotations in this package. The sca
 grep -rn "# ++\|# --" compiler/
 ```
 
-## Stale documents
+## Core documents
 
-[docs/domain-vision.md](docs/domain-vision.md) and [docs/core-domain-distillation.md](docs/core-domain-distillation.md) are Draft. They still cite `tiferet_elsl/` and `proto:`. The import package is `compiler`. Do not treat those citations as the implementation map. A rewrite of either draft is its own docs change, not a side effect of compiler work.
+[docs/domain-vision.md](docs/domain-vision.md) and [docs/core-domain-distillation.md](docs/core-domain-distillation.md) are Draft. They cite trunk (`compiler/`, `v1.0.1`); where they and the code disagree, the code wins. Updating either draft is its own docs change, not a side effect of compiler work.
 
 ## Contributing
 
