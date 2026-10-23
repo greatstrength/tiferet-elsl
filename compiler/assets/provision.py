@@ -93,6 +93,31 @@ COMPILER_DEFAULT_PROVISIONS = {
         class_name='EventSectionSpecification',
         parameters={},
     ),
+    'event.permitted_group': create_default_provision_data(
+        kind='specification',
+        applies_to='artifact_header',
+        module_path='compiler.utils.core',
+        class_name='PermittedGroupSpecification',
+        parameters={
+            'permitted_groups': [
+                'imports',
+                'constants',
+                'functions',
+                'classes',
+                'events',
+                'exports',
+            ],
+            'error_code': 'DISALLOWED_EVENT_GROUP',
+            'module_label': 'an events module',
+        },
+    ),
+    'event.group_section_agreement': create_default_provision_data(
+        kind='specification',
+        applies_to='artifact_header',
+        module_path='compiler.utils.core',
+        class_name='GroupSectionAgreementSpecification',
+        parameters={},
+    ),
     'domain.permitted_group': create_default_provision_data(
         kind='specification',
         applies_to='artifact_header',

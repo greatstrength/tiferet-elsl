@@ -958,7 +958,7 @@ def test_provisions_prepend_artifact_order_rows() -> None:
     Test that the catalog begins with the three order rows and empty parameters.
     '''
 
-    # The published 49 keys stay after the three new rows.
+    # The other 51 keys stay after the three order rows.
     keys = list(COMPILER_DEFAULT_PROVISIONS)
     assert keys[:4] == [
         'common.section_order',
@@ -966,7 +966,7 @@ def test_provisions_prepend_artifact_order_rows() -> None:
         'common.property_member',
         'common.import_group',
     ]
-    assert len(keys) == 52
+    assert len(keys) == 54
     for key in keys[:3]:
         value = COMPILER_DEFAULT_PROVISIONS[key]
         assert value['parameters'] == {}
