@@ -2409,7 +2409,7 @@ class RequiredBaseSpecification(Specification):
         return [finding]
 
     # * method: reaches_known_base
-    # ++ todo: workaround until the Tiferet release carrying DomainObject root self-verification is identified (TBD: Tiferet RFP (domain root verification)); then replace this module-local walk with that verification.
+    # ++ todo: workaround until the Tiferet release carrying DomainObject root self-verification is identified (greatstrength/tiferet#1323); then replace this module-local walk with that verification.
     def reaches_known_base(self, base_name: str, context: ConformanceContext) -> bool:
         '''
         Follow a base chain through this module's classes to a known base.
