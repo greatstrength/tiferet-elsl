@@ -3,46 +3,14 @@
 # *** imports
 
 # ** core
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable
 
 # ** infra
 from tiferet.assets import TiferetError
 from tiferet.contexts.cache import CacheContext
 from tiferet.contexts.feature import FeatureContext
 
-# ** app
-from .provision import COMPILER_PROVISION_CACHE_PREFIX
-
 # *** constants
-
-# ** constant: asked_steps
-ASKED_STEPS: Tuple[str, ...] = (
-    'scan',
-    'parse',
-    'semantic',
-    'compile',
-    'compile-from-ast',
-)
-
-# ** constant: dialect_service_id
-DIALECT_SERVICE_ID: Dict[str, str] = {
-    'assets': 'check_asset_conformance_event',
-    'blueprints': 'check_blueprints_conformance_event',
-    'contexts': 'check_context_conformance_event',
-    'di': 'check_di_conformance_event',
-    'domain': 'check_domain_conformance_event',
-    'events': 'check_event_conformance_event',
-    'interfaces': 'check_interface_conformance_event',
-    'mappers': 'check_mapper_conformance_event',
-    'repos': 'check_repos_conformance_event',
-    'utils': 'check_utils_conformance_event',
-}
-
-# ** constant: asked_step_unknown_id
-ASKED_STEP_UNKNOWN_ID: str = 'ASKED_STEP_UNKNOWN'
-
-# ** constant: component_required_id
-COMPONENT_REQUIRED_ID: str = 'COMPONENT_REQUIRED'
 
 # ** constant: resolver_required_id
 RESOLVER_REQUIRED_ID: str = 'RESOLVER_REQUIRED'
@@ -53,39 +21,15 @@ EVENT_NOT_RESOLVED_ID: str = 'EVENT_NOT_RESOLVED'
 # ** constant: compiler_feature_lookup_refused_id
 COMPILER_FEATURE_LOOKUP_REFUSED_ID: str = 'COMPILER_FEATURE_LOOKUP_REFUSED'
 
-# *** functions
-
-# ** function: _present_keys
-def _present_keys(kwargs: dict, names: Tuple[str, ...]) -> dict:
-    '''
-    Copy caller keys that were actually supplied.
-
-    Absent keys stay omitted. This helper does not invent a default.
-
-    :param kwargs: The caller keyword arguments.
-    :type kwargs: dict
-    :param names: Keys that may be forwarded.
-    :type names: tuple
-    :return: The supplied keys.
-    :rtype: dict
-    '''
-
-    # Keep only keys the caller passed. Do not case-fold or strip.
-    return {
-        name: kwargs[name]
-        for name in names
-        if name in kwargs
-    }
-
 # *** contexts
 
 # ** context: compiler_feature_context
 class CompilerFeatureContext(FeatureContext):
     '''
-    Run an asked compiler step by calling its events in code.
+    Resolve one service id and execute it.
 
-    The asked string is the program. A catalog row is not a branch, and
-    this context does not register over the feature domain type.
+    This context does not own a sequence. The compiler session calls it
+    once per event, and it does not register over the feature domain type.
     '''
 
     # * init
@@ -102,119 +46,11 @@ class CompilerFeatureContext(FeatureContext):
         # Store both arguments. Do not wrap the resolver.
         super().__init__(get_dependency=get_dependency, cache=cache)
 
-    # * method: run_step
-    def run_step(self, step: str, **kwargs) -> Any:
-        '''
-        Execute one asked step and return the last event result.
-
-        :param step: One of scan, parse, semantic, compile, compile-from-ast.
-        :type step: str
-        :param kwargs: Caller keys forwarded only to the event that accepts them.
-        :type kwargs: dict
-        :return: The last event result for the asked step.
-        :rtype: Any
-        '''
-
-        # An unknown string fails before any event is resolved.
-        if step not in ASKED_STEPS:
-            asked = ', '.join(ASKED_STEPS)
-            TiferetError.raise_error(
-                ASKED_STEP_UNKNOWN_ID,
-                message=f"Asked step '{step}' is not one of: {asked}.",
-                step=step,
-            )
-
-        # Semantic asks require one component string. Scan and parse do not.
-        component = kwargs.get('component')
-        if step in ('semantic', 'compile', 'compile-from-ast') and component not in DIALECT_SERVICE_ID:
-            TiferetError.raise_error(
-                COMPONENT_REQUIRED_ID,
-                message=f"Asked step '{step}' requires one of the ten component strings. Got {component}.",
-                step=step,
-                component=component,
-            )
-
-        # Scan tokenizes, then emits that return and stops.
-        if step == 'scan':
-
-            # Lexical analysis returns the object the emit receives.
-            tokens = self._resolve_and_execute(
-                step,
-                'perform_lexical_analysis_event',
-                **_present_keys(kwargs, ('source_file',)),
-            )
-
-            # Emit that return. Do not replace it.
-            return self._resolve_and_execute(
-                step,
-                'emit_scan_result_event',
-                tokens=tokens,
-                **_present_keys(kwargs, ('source_file', 'output', 'output_format')),
-            )
-
-        # A stored model is loaded. Source asks analyze without earlier emits.
-        if step == 'compile-from-ast':
-            ast = self._resolve_and_execute(
-                step,
-                'load_from_ast_event',
-                **_present_keys(kwargs, ('source_file',)),
-            )
-        else:
-
-            # Lexical analysis returns the tokens syntactic analysis consumes.
-            tokens = self._resolve_and_execute(
-                step,
-                'perform_lexical_analysis_event',
-                **_present_keys(kwargs, ('source_file',)),
-            )
-
-            # Syntactic analysis receives that object, not an emit payload.
-            ast = self._resolve_and_execute(
-                step,
-                'perform_syntactic_analysis_event',
-                tokens=tokens,
-                **_present_keys(kwargs, ('source_file',)),
-            )
-
-        # Parse emits the syntactic return and stops.
-        if step == 'parse':
-            emit_kwargs = _present_keys(
-                kwargs,
-                ('source_file', 'output', 'output_format', 'include_tokens', 'extract'),
-            )
-            if 'include_tokens' in kwargs:
-                emit_kwargs['tokens'] = tokens
-            return self._resolve_and_execute(
-                step,
-                'emit_parse_result_event',
-                ast=ast,
-                **emit_kwargs,
-            )
-
-        # Analysis, common conformance, and one dialect share the same ast.
-        semantic, findings = self._run_conformance(step, ast, component)
-
-        # Only the semantic ask emits that result.
-        if step == 'semantic':
-            return self._resolve_and_execute(
-                step,
-                'emit_semantic_result_event',
-                ast=ast,
-                semantic=semantic,
-                findings=findings,
-                **_present_keys(kwargs, ('source_file', 'output', 'output_format', 'include_ast')),
-            )
-
-        # Compile continues into codegen. Findings do not stop it.
-        return self._run_codegen(step, ast, component, kwargs)
-
-    # * method: _resolve_and_execute
-    def _resolve_and_execute(self, step: str, service_id: str, **event_kwargs) -> Any:
+    # * method: resolve_and_execute
+    def resolve_and_execute(self, service_id: str, **event_kwargs) -> Any:
         '''
         Resolve one service id and call execute.
 
-        :param step: The asked step, named if resolution fails.
-        :type step: str
         :param service_id: The literal service id to resolve.
         :type service_id: str
         :param event_kwargs: Arguments for execute. Not resolution flags.
@@ -236,117 +72,20 @@ class CompilerFeatureContext(FeatureContext):
         except Exception:
             TiferetError.raise_error(
                 EVENT_NOT_RESOLVED_ID,
-                message=f"Failed to resolve {service_id} for asked step '{step}'.",
+                message=f'Failed to resolve {service_id}.',
                 service_id=service_id,
-                step=step,
             )
 
         # A missing event is not an execute.
         if event is None:
             TiferetError.raise_error(
                 EVENT_NOT_RESOLVED_ID,
-                message=f"Failed to resolve {service_id} for asked step '{step}'.",
+                message=f'Failed to resolve {service_id}.',
                 service_id=service_id,
-                step=step,
             )
 
         # Call execute. Do not construct the event.
         return event.execute(**event_kwargs)
-
-    # * method: _run_conformance
-    def _run_conformance(self, step: str, ast: Any, component: str) -> Tuple[Any, Any]:
-        '''
-        Run semantic analysis, common conformance, and one dialect check.
-
-        :param step: The asked step, named if resolution fails.
-        :type step: str
-        :param ast: The syntactic or loaded declaration.
-        :type ast: Any
-        :param component: One of the ten component strings.
-        :type component: str
-        :return: The semantic result and the dialect findings.
-        :rtype: tuple
-        '''
-
-        # Semantic analysis receives the ast, the cache, and the one prefix.
-        semantic = self._resolve_and_execute(
-            step,
-            'perform_semantic_analysis_event',
-            ast=ast,
-            cache=self.cache,
-            provision_prefix=COMPILER_PROVISION_CACHE_PREFIX,
-        )
-
-        # Common conformance receives that ast and the semantic return.
-        common = self._resolve_and_execute(
-            step,
-            'check_common_conformance_event',
-            ast=ast,
-            semantic=semantic,
-            cache=self.cache,
-            provision_prefix=COMPILER_PROVISION_CACHE_PREFIX,
-        )
-
-        # One dialect receives the common return as findings.
-        findings = self._resolve_and_execute(
-            step,
-            DIALECT_SERVICE_ID[component],
-            ast=ast,
-            semantic=semantic,
-            findings=common,
-            cache=self.cache,
-            provision_prefix=COMPILER_PROVISION_CACHE_PREFIX,
-        )
-
-        # Findings do not choose the next event.
-        return semantic, findings
-
-    # * method: _run_codegen
-    def _run_codegen(self,
-                     step: str,
-                     ast: Any,
-                     component: str,
-                     kwargs: dict) -> Any:
-        '''
-        Generate, optimize, and emit from the analysis declaration.
-
-        :param step: The asked step, named if resolution fails.
-        :type step: str
-        :param ast: The syntactic or loaded declaration.
-        :type ast: Any
-        :param component: The asked component string.
-        :type component: str
-        :param kwargs: Caller keys. Only a supplied optimization is forwarded.
-        :type kwargs: dict
-        :return: The codegen emit result.
-        :rtype: Any
-        '''
-
-        # Generate from the analysis declaration, not an emit payload.
-        generated = self._resolve_and_execute(
-            step,
-            'generate_code_event',
-            ast=ast,
-            component=component,
-        )
-
-        # Pass a level only when the caller supplied optimization.
-        optimize_kwargs = {'codegen': generated}
-        if 'optimization' in kwargs:
-            optimize_kwargs['O'] = kwargs['optimization']
-        optimized = self._resolve_and_execute(
-            step,
-            'optimize_code_event',
-            **optimize_kwargs,
-        )
-
-        # The optimizer return is what the emit keeps.
-        return self._resolve_and_execute(
-            step,
-            'emit_codegen_result_event',
-            codegen=optimized,
-            **_present_keys(kwargs, ('source_file', 'output', 'output_format')),
-        )
 
     # * method: execute_feature
     def execute_feature(self, request: Any = None, *flags, **kwargs) -> None:
@@ -363,7 +102,7 @@ class CompilerFeatureContext(FeatureContext):
         :rtype: None
         '''
 
-        # The ask is run_step. Do not delegate.
+        # The session dispatches the ask. Do not delegate.
         self._refuse_lookup('execute_feature')
 
     # * method: resolve_feature_steps
@@ -379,7 +118,7 @@ class CompilerFeatureContext(FeatureContext):
         :rtype: None
         '''
 
-        # The sequences are code in run_step.
+        # The sequences are methods on the compiler session.
         self._refuse_lookup('resolve_feature_steps')
 
     # * method: resolve_step_event

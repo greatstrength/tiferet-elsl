@@ -112,15 +112,17 @@ list of specifications, some shared, some constructed with that dialect's
 data.
 
 **Finding** — one collected failure: an error code, a message, and a
-position when the model has one. Findings accumulate. The declared pipelines
-do not stop distillation because a finding exists.
+position when the model has one. Findings accumulate. The pipelines do not
+stop distillation because a finding exists.
 
 **Distillation** — turning the model into organized ElohaSL data. The
 prior-art code still calls this step code generation.
 
-**Pipeline** — an ordered list of those behaviors, declared in configuration
-rather than hard-coded in a command name. Each pipeline here is a prefix of
-the next, or the same tail started from a stored model.
+**Pipeline** - an ordered run of those behaviors, hard-coded as methods on
+the compiler session that include each other. It is not declared in
+configuration, and it is not the command name. Each of the first four
+includes the earlier analysis. It does not call the earlier asked step,
+because that step emits. The fifth starts from a stored model.
 
 ## 4. What ElSL reads
 
@@ -310,21 +312,30 @@ rewrite is first (`proto:compiler/utils/optimizer.py (233-250)`).
 
 ## 6. How the behaviors compose
 
-Pipelines are declared, not named per component type
-(`proto:compiler/assets/feature.yml (1-4)`). Five of them exist. Each of
-the first four is a prefix of the next. The fifth starts from a stored
-model. Steps hand results forward by named key (`tokens`, `ast`, `semantic`,
-`findings`, `codegen`).
+The five pipelines are hard-coded methods on `CompilerAppSessionContext`
+(`compiler/contexts/session.py`). They include each other. They are not
+declared in configuration, and they are not named per component type. Each
+of the first four includes the earlier analysis and does not call the
+earlier asked step, because that step emits. `compile-from-ast` starts from
+a stored model. A later method calls the earlier analysis method and passes
+that return as an argument (`tokens`, `ast`, `semantic`, `findings`). It
+does not copy the event list, and it does not hand results through a
+configured `data_key`.
 
-- **scan / module** — tokens, then the scan result (`feature.yml (6-16)`).
-- **parse / module** — tokens, then the structural model (`(17-28)`).
-- **semantic / module** — plus the symbol table, resolution, the common
-  rules, the dialect rules gated on component type, and an analysis result
-  (`(29-95)`).
-- **compile / module** — plus distillation, optimization, and emission
-  (`(96-130)`).
-- **compile / ast** — the same tail, starting from a stored model
-  (`(130-151)`).
+`COMPILER_DEFAULT_FEATURES` remains a declaration of the service ids those
+methods employ. It is not the program. This compiler does not walk
+`feature.steps` to choose the next event.
+
+- **scan** - `lexical_analysis`, then the scan emit.
+- **parse** - `lexical_analysis`, then `syntactic_analysis`, then the parse
+  emit. It does not call `scan`.
+- **semantic** - `lexical_analysis`, `syntactic_analysis`, `conformance`,
+  then the semantic emit. It does not call `scan` or `parse`.
+- **compile** - `lexical_analysis`, `syntactic_analysis`, `conformance`,
+  then `distillation`. It does not call `semantic`. Findings do not skip
+  distillation.
+- **compile-from-ast** - load a stored model, then `conformance`, then
+  `distillation`. No lexical analysis. No syntactic analysis.
 
 The command surface uses the same split. The command name is `module` (or
 `ast`). The component type is an argument, not a command
@@ -343,9 +354,9 @@ flowchart LR
   LOAD --> SEM
 ```
 
-The diagram is `compile / module`, plus the stored-model entry. `scan` and
-`parse` stop earlier. Nothing in the declared pipeline skips distillation
-because findings were collected.
+The diagram is `compile`, plus the stored-model entry. `scan` and `parse`
+stop earlier. Nothing in these methods skips distillation because findings
+were collected.
 
 ## 7. Relationships between component types
 
