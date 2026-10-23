@@ -2400,6 +2400,7 @@ class EventSectionSpecification(Specification):
     Require an event section's class to declare an execute method.
 
     Non-event headers, and event sections with no class, are skipped.
+    A base event that another class in the same module extends is exempt.
     '''
 
     # * attribute: section_keyword
@@ -2429,6 +2430,15 @@ class EventSectionSpecification(Specification):
         if class_decl is None:
             return []
         if class_decl.has_method('execute'):
+            return []
+
+        # A base event that another class in this module extends gets execute from its subclasses.
+        module_scope = context.scope_stack[0] if context.scope_stack else None
+        if module_scope is not None and any(
+            symbol.kind == SYMBOL_KIND_CLASS_DEF
+            and symbol.type_annotation == class_decl.name
+            for symbol in module_scope.symbols.values()
+        ):
             return []
 
         # Record the missing execute method.
