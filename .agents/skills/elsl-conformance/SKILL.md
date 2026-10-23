@@ -23,7 +23,7 @@ description: >
 - `compiler/events/typecheck.py`
 - `compiler/contexts/feature.py`
 - `compiler/assets/feature.py`
-- `compiler/assets/config.yml`
+- `compiler/assets/app.py`
 
 ## Inputs
 - The conformance event, or the component type being gated.
@@ -48,7 +48,7 @@ description: >
 
 Shorter stems are not typos: `ASSET_RULE_SET`, `MAPPER_RULE_SET`, `INTERFACE_RULE_SET`. The contexts row does not line up internally: constant and class are plural, `service_id` is singular, choice is `contexts`.
 
-Every conformance `service_id` is registered in `compiler/assets/config.yml` to `compiler.events.typecheck` and the class in the table.
+Every conformance `service_id` is registered as a service row in `compiler/assets/app.py` (`create_app_service_dependency_data`) to `compiler.events.typecheck` and the class in the table.
 
 ## Example
 
@@ -100,7 +100,7 @@ What the check protects is the source that later becomes the envelope: an import
 
 ## Procedure
 1. Bind one `*_RULE_SET` on a `ConformanceEvent`. Do not walk the AST in the event. Do not read `component` in `execute`.
-2. Register `service_id` in `compiler/assets/config.yml` to that class. Do not guess the class from the step name.
+2. Register `service_id` as a service row in `compiler/assets/app.py` to that class. Do not guess the class from the step name.
 3. Gate the event in `DIALECT_SERVICE_ID` in `compiler/contexts/feature.py`, and list its step on semantic, `compile.module`, and `compile.ast` in `compiler/assets/feature.py`.
 4. New specifications go in `compiler/utils/core.py` and onto the constant in `compiler/utils/typecheck.py`. Use `elsl-rule-sets` for the current lists.
 5. A new component choice is `elsl-schema`.
