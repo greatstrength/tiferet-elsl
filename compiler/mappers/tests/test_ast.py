@@ -463,3 +463,17 @@ def test_new_if_stmt_normalizes_body() -> None:
     # The body is a one-element list.
     assert len(stmt.body) == 1
     assert stmt.body[0] is body
+
+# ** test: new_name_or_literal_number_text
+def test_new_name_or_literal_number_text() -> None:
+    '''
+    Test that number literal text classifies as an int or a float literal.
+    '''
+
+    # Digits only are an int. Digits, one dot, and digits are a float.
+    assert Expr.new_name_or_literal_expr('42').kind == ExprKind.INT_VAL
+    assert Expr.new_name_or_literal_expr('4.2').kind == ExprKind.NUM_VAL
+
+    # The raw text is kept, and a quoted number stays a string.
+    assert Expr.new_name_or_literal_expr('4.2').value == '4.2'
+    assert Expr.new_name_or_literal_expr("'42'").kind == ExprKind.STR_VAL
