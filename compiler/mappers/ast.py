@@ -4,6 +4,7 @@
 
 # ** core
 from __future__ import annotations
+import re
 from typing import List, Optional
 
 # ** app
@@ -411,9 +412,16 @@ class ExpressionAggregate(Expression):
         :rtype: ExpressionAggregate
         '''
 
-        # Boolean and other strings are literal values.
+        # Boolean, number, and other strings are literal values.
         if isinstance(value, str):
-            kind = ExprKind.BOOL_VAL if value in ('True', 'False') else ExprKind.STR_VAL
+            if value in ('True', 'False'):
+                kind = ExprKind.BOOL_VAL
+            elif re.fullmatch(r'[0-9]+', value):
+                kind = ExprKind.INT_VAL
+            elif re.fullmatch(r'[0-9]+\.[0-9]+', value):
+                kind = ExprKind.NUM_VAL
+            else:
+                kind = ExprKind.STR_VAL
             return ExpressionAggregate(
                 kind=kind,
                 value=value,

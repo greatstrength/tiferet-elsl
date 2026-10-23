@@ -2747,3 +2747,34 @@ def test_member_see_stacks_with_todo(parser) -> None:
     # Both notes are stored, and the SEE still sets the guide path.
     assert [annot['kind'] for annot in member.annotations] == ['TODO', 'SEE']
     assert member.guide_path == '@guides/domain/error.md#error'
+
+# ** test: test_parse_number_literals_typed_from_text
+def test_parse_number_literals_typed_from_text(parser) -> None:
+    '''
+    Test that number literals are typed int or float from their text.
+
+    :param parser: The dialect harness.
+    :type parser: ParserHarness
+    '''
+
+    # An int, a float, and a quoted number are each assigned.
+    source = _event(
+        '# * method: execute\n'
+        'def execute(self):\n'
+        '    count = 42\n'
+        '    ratio = 4.2\n'
+        "    label = '42'\n"
+    )
+    values = [
+        stmt.expr.right
+        for stmt in _statements(get_func_decl(_parse(parser, source)))
+    ]
+
+    # The kinds and literal types follow the text. The raw text is kept.
+    assert [value.kind for value in values] == [
+        ExprKind.INT_VAL,
+        ExprKind.NUM_VAL,
+        ExprKind.STR_VAL,
+    ]
+    assert [value.literal_type for value in values] == ['int', 'float', 'str']
+    assert [value.value for value in values] == ['42', '4.2', "'42'"]
