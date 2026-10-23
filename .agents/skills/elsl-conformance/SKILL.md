@@ -1,8 +1,8 @@
 ---
 name: elsl-conformance
 description: >
-  Use when adding or changing a gated conformance event, or the feature.yml
-  condition that gates it. Phrases: "gate a conformance check", "conformance
+  Use when adding or changing a gated conformance event, or the component gate
+  that selects it. Phrases: "gate a conformance check", "conformance
   event", "component condition", "check_event_conformance". Not for the
   specification lists, and not for other pipeline wiring.
 ---
@@ -11,7 +11,7 @@ description: >
 
 ## When to use
 - Adding or changing a `ConformanceEvent` subclass.
-- Changing the `feature.yml` condition that gates a conformance step.
+- Changing the component gate (`DIALECT_SERVICE_ID`) that selects a conformance event.
 
 ## When not to use
 - The specification lists inside a rule set — `elsl-rule-sets`.
@@ -21,7 +21,8 @@ description: >
 
 ## Canonical source
 - `compiler/events/typecheck.py`
-- `compiler/assets/feature.yml`
+- `compiler/contexts/feature.py`
+- `compiler/assets/feature.py`
 - `compiler/assets/config.yml`
 
 ## Inputs
@@ -100,14 +101,14 @@ What the check protects is the source that later becomes the envelope: an import
 ## Procedure
 1. Bind one `*_RULE_SET` on a `ConformanceEvent`. Do not walk the AST in the event. Do not read `component` in `execute`.
 2. Register `service_id` in `compiler/assets/config.yml` to that class. Do not guess the class from the step name.
-3. Gate the step in `compiler/assets/feature.yml`. Anchor it once and alias it onto semantic, `compile.module`, and `compile.ast`.
+3. Gate the event in `DIALECT_SERVICE_ID` in `compiler/contexts/feature.py`, and list its step on semantic, `compile.module`, and `compile.ast` in `compiler/assets/feature.py`.
 4. New specifications go in `compiler/utils/core.py` and onto the constant in `compiler/utils/typecheck.py`. Use `elsl-rule-sets` for the current lists.
 5. A new component choice is `elsl-schema`.
 6. **Trunk** — implement against the published TRD. Do not copy from proto.
 7. **Prototype** — only if binding.md says the prototype strand is active.
 
 ## Outputs
-- The event, the registration, and the `feature.yml` condition on the strand branch, in a PR to that strand. Not an issue body.
+- The event, the registration, and the `DIALECT_SERVICE_ID` entry on the strand branch, in a PR to that strand. Not an issue body.
 
 ## Guardrails
 - Never commit or merge unless asked.
