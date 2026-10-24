@@ -1,4 +1,4 @@
-# AGENTS.md — tiferet-elsl (v1.0.0)
+# AGENTS.md — tiferet-elsl (v1.0.1)
 
 Orientation index for this repository. It is not a copy of the Tiferet framework guide, and it does not restate the compiler. Where a document and the code disagree, the code wins.
 
@@ -11,12 +11,12 @@ Orientation index for this repository. It is not a copy of the Tiferet framework
 - **Python:** >= 3.10
 - **Distribution:** `tiferet-elsl` `1.0.1` (BSD-3-Clause; on PyPI)
 - **Import package:** `compiler` (`compiler.__version__` is `1.0.1`)
-- **Console script:** `tiferet-compiler` (`compiler.cli:main`)
+- **Console script:** `tiferet-compiler` (`compiler.cli:main`). The maintainer has ruled that the entry point becomes `tiferet-elsl`. That rename is prototype work and is not on trunk.
 - **Release:** https://github.com/greatstrength/tiferet-elsl/releases/tag/v1.0.1
 - **Sessions:** `compiler` and `compiler_cli`. The console script boots `compiler_cli`.
 - **Phone book:** [docs/collab/binding.md](docs/collab/binding.md)
 
-`v1.x-proto` is still not cut. The trunk reconstruction through `v1.0.0` is closed. Do not invent a prototype branch, and do not import `tiferet_elsl`.
+`v1.x-proto` is cut and active (the `v1.1.0b1` drafting round; see [binding.md](docs/collab/binding.md)). Prototype work happens only on that branch, and trunk never takes proto code by git. The trunk reconstruction through `v1.0.0` is closed. Do not import `tiferet_elsl`.
 
 ## Package map
 

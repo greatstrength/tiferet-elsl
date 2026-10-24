@@ -93,7 +93,7 @@ A conformance event does not write `cmpt`. Its output is the findings list. The 
 condition: "$r.component == 'events'"
 ```
 
-means this event runs only when the caller asked to compile an events module. The construct under check is still the source marker, for example `# ** event: get_feature` and its `execute` method. The finding is `{error_code, message, ...}`. The passing construct is what `elsl-language` later emits as `evt_grp.evts.get_feature`.
+means this event runs only when the caller asked to compile an events module. The construct under check is still the source marker, for example `# ** event: get_feature` and its `execute` method. The finding is `{error_code, message, ...}`. The passing construct is what `elsl-language` later emits under `cmpt.grps[].evts.get_feature`, the contract. On 1.0.x it is also repeated as `evt_grp.evts.get_feature`, a frozen legacy shim.
 
 What the check protects is the source that later becomes the envelope: an import group becomes `impt`, a section becomes a group entry or an event, a member becomes `attributes`, `injections`, `execute`, or `methods`. The finding stays a dict with `error_code` and `message`. It is not an ElohaSL key. The document shape is `elsl-language`.
 

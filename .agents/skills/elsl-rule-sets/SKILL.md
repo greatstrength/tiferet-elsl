@@ -44,6 +44,8 @@ A later dialect adds a constant list, not a `ConformanceChecker` subclass. New s
 
 `EVENT_RULE_SET`: `EventSectionSpecification` `event.section` `artifact_header`.
 
+`EVENT_RULE_SET` has no `AppImportSpecification`. Events do not instantiate an app-import (layer) rule (`compiler/utils/core.py`, `AppImportSpecification` docstring). `from ..repos import X` in an events module produces no finding. Do not tell a user that the compiler enforces event import layering.
+
 `DOMAIN_RULE_SET`:
 
 - `PermittedGroupSpecification` `domain.permitted_group` — `imports`, `constants`, `functions`, `classes`, `models`, `exports`. Error `DISALLOWED_DOMAIN_GROUP`.
@@ -104,6 +106,51 @@ A later dialect adds a constant list, not a `ConformanceChecker` subclass. New s
 - `GroupSectionAgreementSpecification` `blueprints.group_section_agreement`
 
 Unless a row says otherwise, `applies_to` is `artifact_header`.
+
+## Error codes
+
+The compiler emits 54 distinct finding codes, all from `compiler/utils/core.py` and `compiler/utils/typecheck.py`. Every one is listed below by the specification that records it. `DISALLOWED_ASSET_GROUP` appears twice in the source, as the `PermittedGroupSpecification` default and on `ASSET_RULE_SET`. Codes set per dialect come from the constructor arguments in the catalog above. If you add a code, add it here in the same change.
+
+| Specification | Code | Recorded when |
+|---|---|---|
+| `ImportGroupSpecification` | `INVALID_IMPORT_GROUP` | An import section is not `core`, `infra`, or `app`. |
+| | `INVALID_IMPORT_CONTENT` | An import section contains a non-import statement. |
+| `SectionClassNameSpecification` | `ARTIFACT_CLASS_NAME_MISMATCH` | The class name is not the PascalCase of the section's snake_case id. |
+| `FunctionSectionNameSpecification` | `FUNCTION_NAME_MISMATCH` | The function name is not the section id. |
+| `AttributeMemberSpecification` | `ATTRIBUTE_MEMBER_NAME_MISMATCH` | The variable name is not the `# * attribute:` name. |
+| | `INVALID_ATTRIBUTE_MEMBER_TYPE` | The attribute member is a function or class, not a variable. |
+| `MethodMemberSpecification` | `INVALID_METHOD_MEMBER_TYPE` | The method member is not a function. |
+| | `METHOD_MEMBER_NAME_MISMATCH` | The function name is not the `# * method:` name. |
+| | `METHOD_MISSING_CLS` | A classmethod's first parameter is not `cls`. |
+| | `METHOD_MISSING_SELF` | An instance method's first parameter is not `self`. |
+| | `INVALID_VALIDATOR_MEMBER` | A `(validator)` method lacks `@model_validator` and `@classmethod`. |
+| | `VALIDATOR_MISSING_RETURN` | A `(validator)` method returns nothing. |
+| | `INVALID_METHOD_RETURN_TYPE` | A declared return type is not a valid return kind. |
+| | `INVALID_STATIC_MEMBER` | A `(static)` method is not `@staticmethod`. |
+| | `STATIC_MEMBER_MISSING_QUALIFIER` | A `@staticmethod` is not labelled `(static)`. |
+| `AssignmentTypeSpecification` | `TYPE_MISMATCH_ASSIGNMENT` | The assigned value's type differs from the target's declared type. |
+| `BinaryOpTypeSpecification`, `ReturnBinaryOpTypeSpecification` | `TYPE_MISMATCH_OPERATION` | A binary operation (or a returned one) uses an unsupported operand pair. Numeric pairs, `str + str`, and `str * int` pass; unknown types are skipped. |
+| `EventSectionSpecification` | `EVENT_MISSING_EXECUTE` | An event class declares no `execute` method. |
+| `PermittedGroupSpecification` | `DISALLOWED_DOMAIN_GROUP`, `DISALLOWED_DI_GROUP`, `DISALLOWED_INTERFACE_GROUP`, `DISALLOWED_MAPPER_GROUP`, `DISALLOWED_UTILS_GROUP`, `DISALLOWED_REPOS_GROUP`, `DISALLOWED_ASSET_GROUP`, `DISALLOWED_CONTEXTS_GROUP`, `DISALLOWED_BLUEPRINTS_GROUP` | A `# ***` group is not permitted for that component. |
+| `AppImportSpecification` | `INVALID_DOMAIN_APP_IMPORT`, `INVALID_DI_APP_IMPORT`, `INVALID_INTERFACE_APP_IMPORT`, `INVALID_MAPPER_APP_IMPORT`, `INVALID_UTILS_APP_IMPORT`, `INVALID_REPOS_APP_IMPORT`, `INVALID_ASSET_APP_IMPORT`, `INVALID_CONTEXTS_APP_IMPORT`, `INVALID_BLUEPRINTS_APP_IMPORT` | An `app` import targets a component outside the allowed list. |
+| `RequiredBaseSpecification` | `MODEL_MISSING_DOMAIN_OBJECT_BASE`, `REPO_MISSING_BASE`, `CONTEXT_MISSING_BASE_CONTEXT` | The class does not declare the base its rule-set row requires (see each row above). |
+| `GroupSectionAgreementSpecification` | `SECTION_GROUP_MISMATCH` | A section keyword does not belong under its `# ***` group. |
+| `ConstantSectionNameSpecification` | `ASSET_CONSTANT_NAME_MISMATCH` | The assignment target is not the UPPER_SNAKE of the `# ** constant:` id. |
+| `DomainAttributeSpecification` | `DOMAIN_ATTRIBUTE_MISSING_TYPE` | A domain attribute has no type annotation. |
+| | `DOMAIN_ATTRIBUTE_MISSING_FIELD` | A domain attribute is not initialized with `Field(...)`. |
+| | `DOMAIN_ATTRIBUTE_MISSING_DESCRIPTION` | The `Field(...)` call has no `description` keyword. |
+| `MapperRolesAttributeSpecification` | `MAPPER_ROLES_MISSING_CLASSVAR_TYPE` | `_ROLES` is not typed `ClassVar[Dict[str, Dict[str, Any]]]`. |
+| | `MAPPER_ROLES_MISSING_DICT_LITERAL` | `_ROLES` is not a dict literal. |
+| `InterfaceAbstractMethodSpecification` | `INTERFACE_METHOD_MISSING_ABSTRACTMETHOD` | An interface method lacks `@abstractmethod`. |
+| | `INTERFACE_METHOD_MISSING_NOT_IMPLEMENTED` | An interface method body is not exactly `raise NotImplementedError(...)`. |
+| `DIAbstractMethodSpecification` | `DI_ABSTRACT_METHOD_MISSING_NOT_IMPLEMENTED` | An `@abstractmethod` DI method body is not exactly `raise NotImplementedError(...)`. |
+| `ContextManagerPairingSpecification` | `INVALID_CONTEXT_MANAGER_MEMBER` | A `(context manager)` method is not `__enter__` or `__exit__`. |
+| | `INVALID_CONTEXT_MANAGER_EXIT_SIGNATURE` | `__exit__` does not take `self` plus three exception-info parameters. |
+| | `CONTEXT_MANAGER_MISSING_PAIR` | Only one of `__enter__` / `__exit__` is present. |
+| `ReposCrudMethodSpecification` | `REPO_MISSING_CRUD_METHOD` | A repo class lacks one of `exists`, `get`, `list`, `save`, `delete`. |
+| | `REPO_UNEXPECTED_PUBLIC_METHOD` | A repo class declares any other public (non-underscore) method. |
+
+These are conformance findings, not `ServiceError` codes. A finding is printed to stdout by `semantic` (exit code 0). It is not written to `-o`, and `compile` does not show it.
 
 ## Relation to ElohaSL
 

@@ -31,7 +31,7 @@ description: >
 
 ElohaSL here is the compiled document, not the Python source. A construct is a source marker plus the keys it emits. A missing key means the construct was absent or empty. It does not mean an empty list.
 
-`compile` with `-c events` emits `cmpt` and `evt_grp`. Any other `-c` emits `cmpt` only. `cmpt` never contains `evt_grp`.
+`compile` with `-c events` emits `cmpt` and `evt_grp`. Any other `-c` emits `cmpt` only. `cmpt` never contains `evt_grp`. `cmpt` is the only output contract (maintainer ruling). `evt_grp` is a legacy shim, frozen in 1.0.0 output. Removing it is prototype work. Do not build new readers on `evt_grp`.
 
 ## Module
 
@@ -72,21 +72,29 @@ Two symbols from one module collapse into one row. First-seen module order is ke
 # *** events
 
 # ** event: get_feature
-class GetFeature:
+class GetFeature(FeatureEvent):
     '''Retrieve a feature by identifier.'''
 ```
 
-The section name is the key. The class name is the payload name.
+The section name is the key. The class name is the payload name. Output of `tiferet-compiler compile module event.py -c events` (file named `event.py`):
 
 ```yaml
+cmpt:
+  name: event
+  kind: events
+  grps:
+  - name: events
+    evts:
+      get_feature: &id001
+        name: GetFeature
+        desc: Retrieve a feature by identifier.
 evt_grp:
+  name: event
   evts:
-    get_feature:
-      name: GetFeature
-      desc: Retrieve a feature by identifier.
+    get_feature: *id001
 ```
 
-`cmpt.grps` also gets an events group. A class with no base has no `base` key. Do not invent one.
+`cmpt.grps` also gets an events group, and in YAML output `evt_grp.evts` entries are aliases of the same payloads. Event payloads never carry `base`, even when the class declares one (`FeatureEvent` above is dropped). Only context payloads get a `base` key. Do not invent one.
 
 `# *** exports` is skipped. It is not emitted as an event group.
 
@@ -113,21 +121,33 @@ def execute(self, id: str) -> Feature:
     return feature
 ```
 
-emits, on that event payload:
+emits, on that event payload (the members inside `class GetFeature:` under `# ** event: get_feature`, compiled with `-c events`):
 
 ```yaml
-attributes:
-  - feature_id: {type: str, init: missing}
-injections:
+get_feature:
+  name: GetFeature
+  attributes:
+  - feature_id:
+      type: str
+      init: '''missing'''
+  injections:
   - feature_service:FeatureService:true::The feature service.:
-      assign: [{target: feature_service, value: feature_service}]
-execute:
-  params: ['id:str:true::The feature id.']
-  returns: ['Feature:The feature.']
-  snpt:
-    - coms: ['Load the feature.']
-      stmt: ['Return(feature)']
+      assign:
+      - target: feature_service
+        value: feature_service
+  execute:
+    params:
+    - id:str:true::The feature id.
+    returns:
+    - Feature:The feature.
+    snpt:
+    - coms:
+      - Load the feature.
+      stmt:
+      - Return(feature)
 ```
+
+`init` keeps the source literal verbatim, quotes included: the value is the string `'missing'` (JSON output: `"init": "'missing'"`), not `missing`.
 
 `execute` has no `desc`, even when the method docstring has a summary. `self` is not a parameter. A method whose inner name is not `execute` goes in `methods`, keyed by that name.
 
@@ -160,21 +180,24 @@ emits `grps[].name == blueprints` and `fncs.build_app.params == ['name:str:true:
 ## Constant
 
 ```python
-# *** constants
+# *** constants (ids)
 
-# ** constant: feature_not_found_id (ids)
+# ** constant: feature_not_found_id
 FEATURE_NOT_FOUND_ID = 'FEATURE_NOT_FOUND'
 ```
 
-emits a constants group. The key is the assignment target, not the section name.
+emits a constants group (`-c utils` shown). The key is the assignment target, not the section name.
 
 ```yaml
 grps:
-  - name: constants
-    qual: ids
-    csts:
-      FEATURE_NOT_FOUND_ID: {value: FEATURE_NOT_FOUND}
+- name: constants
+  qual: ids
+  csts:
+    FEATURE_NOT_FOUND_ID:
+      value: '''FEATURE_NOT_FOUND'''
 ```
+
+`qual` comes only from the group line (`# *** constants (ids)`). A qualifier on the section line (`# ** constant: feature_not_found_id (ids)`) emits no `qual`. `value` keeps the source literal verbatim, quotes included (JSON: `"value": "'FEATURE_NOT_FOUND'"`).
 
 Constants are not copied to the envelope root.
 
@@ -186,10 +209,13 @@ A snippet comment becomes `coms`. The statement becomes `stmt` through `encode`,
 |---|---|
 | `return feature` | `Return(feature)` |
 | `return a + b` | `Return(Add(a, b))` |
-| `self.name` | `Attr(self, name)` |
-| `verify(...)` | `Call(verify, ...)` |
+| `return self.name` | `Return(self.name)` |
+| `verify(id)` | `Call(verify, id)` |
+| `f'{id}'` | `f'{id}'` |
 
-`encode` returns an empty string when a kind has no encoding. Comments, artifact headers, imports, and f-strings do not become statements.
+A dotted name such as `self.name` is one name and is emitted as written. `Attr(left, name)` exists in `encode` (`compiler/domain/ast.py`) but the parser does not produce it from source. An f-string is a literal, so a bare f-string line becomes a statement with its source text.
+
+`encode` returns an empty string when a kind has no encoding. Comments, artifact headers, and imports do not become statements.
 
 ## Conformance
 

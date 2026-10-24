@@ -18,7 +18,9 @@
 
 ## Install and invoke
 
-The package is on PyPI. Run `pip install tiferet-elsl`, then call the script. The working directory does not matter. Asset paths are resolved from the installed package.
+The package is on PyPI. Run `pip install tiferet-elsl`, then call the script. The session config is resolved from the installed package, so `tiferet-compiler -h` works from any directory.
+
+> **Known issue (v1.0.1):** the catalog paths under `const:` in `config.yml` (`compiler/assets/tokens.yml`, `grammars.yml`, `productions.yml`) are still resolved against the working directory. Run any `scan`, `parse`, `semantic`, or `compile` command from the tiferet-elsl repository root; from elsewhere it exits `1` with `FILE_NOT_FOUND` for `compiler/assets/tokens.yml`. A hotfix is pending.
 
 ```bash
 pip install tiferet-elsl
@@ -66,7 +68,7 @@ tiferet-compiler compile ast ping.json -c events -o ping.yml
 | `--include-tokens` | parse, semantic | Boolean. No value |
 | `--include-ast` | `semantic module` | Boolean. No value |
 | `-c` / `--component` | semantic, compile | Required. The ten choices above |
-| `-O` | both compile commands | `O0` or `O1`. Default `O0`. `O0` leaves codegen unchanged. `O1` shares repeated structures |
+| `-O` | both compile commands | `O0` or `O1`. Default `O0`. `O0` leaves codegen unchanged. `O1` shares repeated structures. Known issue (v1.0.1): other values are not rejected yet (hotfix pending), so pass only `O0` or `O1` |
 
 Boolean flags are presence flags. `--include-tokens true` is not the form.
 

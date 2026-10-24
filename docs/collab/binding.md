@@ -14,12 +14,15 @@ fork those process docs into this repository.
 |---|---|
 | Trunk branch | `main` |
 | Prototype branch | `v1.x-proto` |
-| Prototype strand active | no |
+| Prototype strand active | yes |
 | RFP id prefix | `ESL1` |
 | RFP major | `1` |
 | Next freeze id pattern | `ESL1-FREEZE-<nnn>` |
 
-`v1.x-proto` is the conventional prototype branch name. It is still not cut.
+`v1.x-proto` is cut and active. It branched from trunk at `4aa465e` and carries
+the `v1.1.0b1` drafting round (RFP PRs #96-#107, closed out at `f761c1e`; head
+`819e0df` as of 2026-10-18). The next drafting milestone is `v1.1.0b2`. Trunk is
+two commits ahead of the branch point (the `1.0.1` release metadata).
 The trunk reconstruction through `v1.0.0` is closed.
 
 `TTC1-FREEZE-001` is the catalog freeze for the reconstruction on trunk

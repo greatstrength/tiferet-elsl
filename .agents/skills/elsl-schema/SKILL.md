@@ -33,7 +33,7 @@ description: >
 
 ## Catalog
 
-`compiler.__version__` is `1.0.0`. The root distribution name is `tiferet-elsl`. There is no `compiler/pyproject.toml`. The root file does not contain `name = "tiferet-compiler"` or `tiferet-command-parser-edu`. The console script remains `tiferet-compiler` (`compiler.cli:main`). The changelog names that script. The test does not read `[project.scripts]`. Renaming the script is still a freeze decision.
+`compiler.__version__` is `1.0.1` (matching `version` in the root `pyproject.toml`; `compiler/tests/test_schema_freeze.py` locks it). The root distribution name is `tiferet-elsl`. There is no `compiler/pyproject.toml`. The root file does not contain `name = "tiferet-compiler"` or `tiferet-command-parser-edu`. The console script remains `tiferet-compiler` (`compiler.cli:main`). The changelog names that script. The test does not read `[project.scripts]`. Renaming the script is still a freeze decision.
 
 Commands, in document order, and no others:
 
